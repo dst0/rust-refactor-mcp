@@ -1,3 +1,4 @@
+pub mod bytespan;
 pub mod extractresult;
 pub mod spans;
 mod extract;

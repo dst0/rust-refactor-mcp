@@ -1,4 +1,4 @@
-use crate::spans::{merge_spans, ByteSpan};
+use crate::bytespan::ByteSpan;
 #[derive(Debug)]
 pub struct ExtractResult {
     pub new_file_path: String,
