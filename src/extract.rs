@@ -1,5 +1,6 @@
 use crate::update_parent_mod::update_parent_mod;
 use crate::merge_spans::merge_spans;
+use crate::remove_spans::remove_spans;
 use crate::namevisitor::NameVisitor;
 use crate::identcollector::IdentCollector;
 use crate::bytespan::ByteSpan;
@@ -163,7 +164,7 @@ pub fn extract_entity(
 }
 /// Backward compat: text-based span removal (kept for external callers).
 pub fn remove_from_source(source: &str, spans: &[ByteSpan]) -> Result<String, String> {
-    Ok(crate::spans::remove_spans(source, spans))
+    Ok(remove_spans(source, spans))
 }
 /// Backward compat: text-based import check (kept for external callers).
 pub fn ensure_source_import(
