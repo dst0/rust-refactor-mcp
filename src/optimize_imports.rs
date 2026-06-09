@@ -1,4 +1,4 @@
-use syn::{parse_file, File, Item};
+use syn::parse_file;
 use std::fs;
 use std::process::Command;
 
