@@ -1,3 +1,4 @@
+use crate::cleanup_unused_imports::cleanup_unused_imports;
 use std::fs;
 use syn::visit::Visit;
 use syn::{File, Item, ItemFn, ItemUse, Type, UseTree};
@@ -198,7 +199,9 @@ mod tests {
         assert!(has_use_ref("Point", & tree));
     }
 }
-use crate::extract::{
-    extract_entity, find_extracted_indices, collect_referenced_identifiers,
-    cleanup_unused_imports, format_ty_name, item_type, has_use_ref,
-};
+use crate::extract::extract_entity;
+use crate::extract::find_extracted_indices;
+use crate::extract::collect_referenced_identifiers;
+use crate::extract::format_ty_name;
+use crate::extract::item_type;
+use crate::extract::has_use_ref;

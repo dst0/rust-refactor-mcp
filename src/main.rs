@@ -1,3 +1,4 @@
+pub mod cleanup_unused_imports;
 pub mod update_parent_mod;
 pub mod merge_spans;
 pub mod namevisitor;
