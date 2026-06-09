@@ -15,6 +15,15 @@ impl<'a> Visit<'a> for IdentCollector {
     }
     fn visit_attribute(&mut self, attr: &'a syn::Attribute) {
         self.found.insert(attr.path().get_ident().map(|id| id.to_string()).unwrap_or_default());
+        match &attr.meta {
+            syn::Meta::Path(_) => {}
+            syn::Meta::List(list) => {
+                self.scan_token_stream(list.tokens.clone());
+            }
+            syn::Meta::NameValue(nv) => {
+                self.visit_expr(&nv.value);
+            }
+        }
         syn::visit::visit_attribute(self, attr);
     }
     fn visit_type(&mut self, ty: &'a Type) {
