@@ -1,5 +1,5 @@
 use crate::collapse_blank_lines::collapse_blank_lines;
-use crate::extract::ByteSpan;
+use crate::extractresult::ByteSpan;
 /// Remove multiple sorted, non-overlapping byte spans from source text.
 /// Preserves whitespace and comments outside the spans.
 /// Spans must be sorted by start position and must not overlap.

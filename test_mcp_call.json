@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "extract_entity",
+    "arguments": {
+      "file_path": "/home/dst/dev/tektonos/rust/crates/tektonos-services/src/repos/leases.rs",
+      "entity_name": "LeasesRepo",
+      "target_folder": "/home/dst/dev/tektonos/rust/crates/tektonos-services/src/repos/"
+    }
+  },
+  "id": 1
+}

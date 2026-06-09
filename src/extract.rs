@@ -809,23 +809,4 @@ pub fn get_full_module_path(target_folder: &str, new_module: &str) -> String {
     format!("crate::{}", components.join("::"))
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
-pub struct ByteSpan {
-    pub start: usize,
-    pub end: usize,
-}
-
-impl ByteSpan {
-    pub fn new(start: usize, end: usize) -> Self {
-        Self { start, end }
-    }
-}
-
-#[derive(Debug, serde::Serialize)]
-pub struct ExtractResult {
-    pub new_file_path: String,
-    pub test_file_path: Option<String>,
-    pub items_extracted: Vec<String>,
-    pub usage_files_updated: Vec<String>,
-    pub extracted_spans: Vec<ByteSpan>,
-}
+use crate::extractresult::{ByteSpan, ExtractResult};

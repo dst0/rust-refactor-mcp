@@ -17,6 +17,7 @@ pub mod remove_spans;
 pub mod update_parent_mod;
 pub mod dependency_graph;
 pub mod split_file;
+pub mod extractresult;
 pub mod merge_spans;
 pub mod namevisitor;
 pub mod identcollector;

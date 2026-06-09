@@ -1,4 +1,4 @@
-use crate::extract::ByteSpan;
+use crate::extractresult::ByteSpan;
 /// Merge overlapping spans into a minimal set of non-overlapping spans.
 pub fn merge_spans(mut spans: Vec<ByteSpan>) -> Vec<ByteSpan> {
     if spans.len() <= 1 {
