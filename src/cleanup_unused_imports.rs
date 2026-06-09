@@ -1,4 +1,7 @@
-use syn::{File, Item, ItemFn, ItemUse, Type, UseTree};
+use crate::collect_use_names::collect_use_names;
+use crate::collect_referenced_identifiers::collect_referenced_identifiers;
+use crate::is_import_used::is_import_used;
+use syn::Item;
 pub fn cleanup_unused_imports(source: &str) -> String {
     let Ok(mut parsed) = syn::parse_file(source) else {
         return source.to_string();
@@ -16,4 +19,3 @@ pub fn cleanup_unused_imports(source: &str) -> String {
         });
     prettyplease::unparse(&parsed)
 }
-use crate::extract::{collect_referenced_identifiers, is_import_used, collect_use_names};

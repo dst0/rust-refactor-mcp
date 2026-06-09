@@ -1,3 +1,4 @@
+use crate::collapse_blank_lines::collapse_blank_lines;
 use crate::bytespan::ByteSpan;
 /// Remove multiple sorted, non-overlapping byte spans from source text.
 /// Preserves whitespace and comments outside the spans.
@@ -26,4 +27,3 @@ pub fn remove_spans(source: &str, spans: &[ByteSpan]) -> String {
     }
     collapse_blank_lines(&result)
 }
-use crate::spans::collapse_blank_lines;

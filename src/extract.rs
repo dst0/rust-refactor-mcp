@@ -1,7 +1,6 @@
 use syn::visit::Visit;
 use crate::update_parent_mod::update_parent_mod;
 use crate::merge_spans::merge_spans;
-use crate::remove_spans::remove_spans;
 use crate::namevisitor::NameVisitor;
 use crate::identcollector::IdentCollector;
 use crate::bytespan::ByteSpan;
@@ -173,45 +172,7 @@ pub fn extract_entity(
         })
     }
 }
-/// Backward compat: text-based span removal (kept for external callers).
-pub fn remove_from_source(source: &str, spans: &[ByteSpan]) -> Result<String, String> {
-    Ok(remove_spans(source, spans))
-}
-/// Backward compat: text-based import check (kept for external callers).
-pub fn ensure_source_import(
-    source: &str,
-    entity_name: &str,
-    new_file_path: &str,
-) -> String {
-    let Ok(parsed) = syn::parse_file(source) else {
-        return source.to_string();
-    };
-    let used = collect_referenced_identifiers(&parsed.items);
-    if !used.contains(entity_name) {
-        return source.to_string();
-    }
-    for item in &parsed.items {
-        if let Item::Use(iu) = item {
-            if has_use_ref(entity_name, &iu.tree) {
-                return source.to_string();
-            }
-        }
-    }
-    let mod_name = PathBuf::from(new_file_path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or(entity_name)
-        .to_lowercase();
-    let mod_ident = syn::Ident::new(&mod_name, Span::call_site());
-    let entity_ident = syn::Ident::new(entity_name, Span::call_site());
-    let mut new_file = parsed.clone();
-    let use_stmt: Item = syn::parse2(
-            quote::quote!(use crate ::# mod_ident::# entity_ident;),
-        )
-        .unwrap();
-    new_file.items.insert(0, use_stmt);
-    prettyplease::unparse(&new_file)
-}
+
 pub fn find_extracted_indices(parsed: &File, entity_name: &str) -> HashSet<usize> {
     let mut indices = HashSet::new();
     for (idx, item) in parsed.items.iter().enumerate() {

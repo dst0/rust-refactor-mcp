@@ -40,6 +40,9 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+    use crate::handle_initialize::handle_initialize;
+    use crate::handle_tools_list::handle_tools_list;
     #[test]
     fn initialize_response() {
         let resp = handle_initialize(&None);
@@ -116,4 +119,3 @@ mod tests {
         std::fs::remove_dir_all(&tmp).ok();
     }
 }
-use crate::mcp::{handle_initialize, handle_tools_list};

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use syn::visit::Visit;
-use syn::{File, Item, ItemFn, ItemUse, Type, UseTree};
+use syn::Type;
 pub struct IdentCollector {
     pub found: HashSet<String>,
 }

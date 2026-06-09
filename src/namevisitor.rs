@@ -1,7 +1,5 @@
-use crate::cleanup_unused_imports::cleanup_unused_imports;
-use std::fs;
 use syn::visit::Visit;
-use syn::{File, Item, ItemFn, ItemUse, Type, UseTree};
+use syn::{ItemFn, Type};
 pub struct NameVisitor {
     name: String,
     found: bool,
@@ -40,6 +38,14 @@ impl<'a> Visit<'a> for NameVisitor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use syn::{File, Item, Type, UseTree};
+    use crate::cleanup_unused_imports::cleanup_unused_imports;
+    use crate::has_use_ref::has_use_ref;
+    use crate::format_ty_name::format_ty_name;
+    use crate::item_type::item_type;
+    use crate::find_extracted_indices::find_extracted_indices;
+    use crate::collect_referenced_identifiers::collect_referenced_identifiers;
+    use crate::extract::extract_entity;
     pub fn make_source(code: &str) -> File {
         syn::parse_file(code).expect("parse")
     }
@@ -199,9 +205,3 @@ mod tests {
         assert!(has_use_ref("Point", & tree));
     }
 }
-use crate::extract::extract_entity;
-use crate::extract::find_extracted_indices;
-use crate::extract::collect_referenced_identifiers;
-use crate::extract::format_ty_name;
-use crate::extract::item_type;
-use crate::extract::has_use_ref;

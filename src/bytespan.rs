@@ -1,5 +1,3 @@
-use crate::remove_spans::remove_spans;
-use crate::merge_spans::merge_spans;
 use std::fmt;
 /// A byte-range within a source file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +37,9 @@ impl fmt::Display for ByteSpan {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::remove_spans::remove_spans;
+    use crate::merge_spans::merge_spans;
+    use crate::collapse_blank_lines::collapse_blank_lines;
     #[test]
     fn new_valid() {
         let s = ByteSpan::new(5, 15);
@@ -192,4 +193,3 @@ mod tests {
         assert_eq!(r, vec![ByteSpan::new(0, 10), ByteSpan::new(20, 30)]);
     }
 }
-use crate::spans::collapse_blank_lines;
