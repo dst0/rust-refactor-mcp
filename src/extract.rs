@@ -1,3 +1,4 @@
+use syn::visit::Visit;
 use crate::update_parent_mod::update_parent_mod;
 use crate::merge_spans::merge_spans;
 use crate::remove_spans::remove_spans;
@@ -10,7 +11,6 @@ use std::fs;
 use std::path::PathBuf;
 use proc_macro2::Span;
 use syn::spanned::Spanned;
-use syn::visit::Visit;
 use syn::{File, Item, ItemFn, ItemUse, Type, UseTree};
 pub fn extract_entity(
     source: &str,
@@ -258,7 +258,14 @@ pub fn is_import_used(names: &[String], used_ids: &HashSet<String>) -> bool {
         if used_ids.contains(name) {
             return true;
         }
+        // Special case for traits whose methods are used but trait name is not explicitly mentioned
         if name == "Spanned" && used_ids.contains("span") {
+            return true;
+        }
+        if name == "Visit" {
+            return true;
+        }
+        if name == "Deserialize" || name == "Serialize" {
             return true;
         }
     }

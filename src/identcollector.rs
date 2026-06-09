@@ -13,6 +13,10 @@ impl<'a> Visit<'a> for IdentCollector {
         self.found.insert(i.method.to_string());
         syn::visit::visit_expr_method_call(self, i);
     }
+    fn visit_attribute(&mut self, attr: &'a syn::Attribute) {
+        self.found.insert(attr.path().get_ident().map(|id| id.to_string()).unwrap_or_default());
+        syn::visit::visit_attribute(self, attr);
+    }
     fn visit_type(&mut self, ty: &'a Type) {
         syn::visit::visit_type(self, ty);
     }
