@@ -51,6 +51,11 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
             let changed = crate::ssr::ssr(file_path, pattern, replacement)?;
             Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : format!("SSR on {}: {} -> {} (Changed: {})", file_path, pattern, replacement, changed) }] } }))
         }
+        "expand_macros" => {
+            let target = args.get("target").and_then(Value::as_str).ok_or("target is required")?;
+            let result = crate::macro_expander::expand_macros(target)?;
+            Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : result }] } }))
+        }
         _ => Err(format!("Unknown tool: {}", name)),
     }
 }

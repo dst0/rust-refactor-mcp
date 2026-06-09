@@ -60,6 +60,13 @@ Performs structural search and replace on Rust source code.
 | `pattern` | yes | AST pattern to match. |
 | `replacement` | yes | AST replacement pattern. |
 
+### 7. `expand_macros`
+Expands procedural macros for a given target.
+
+| Parameter | Required | Description |
+| :--- | :--- | :--- |
+| `target` | yes | Target module or item to expand. |
+
 ---
 
 ## CLI-Only Commands (Bulk Automation)

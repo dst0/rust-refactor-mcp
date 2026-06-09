@@ -67,6 +67,13 @@ pub fn cli_main(args: &[String]) {
         return;
     }
 
+    if cmd_or_entity == "EXPAND" {
+        let target = args.get(2).expect("Missing expand target");
+        let result = crate::macro_expander::expand_macros(target).expect("Macro expansion failed");
+        println!("{}", result);
+        return;
+    }
+
     let entity_name = cmd_or_entity;
     let target_folder = args.get(2).expect("Missing target_folder");
     let entity_type = args.get(3).map(|s| s.as_str());

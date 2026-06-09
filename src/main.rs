@@ -28,6 +28,7 @@ pub mod rename_entity;
 pub mod fix_cargo;
 pub mod optimize_imports;
 pub mod ssr;
+pub mod macro_expander;
 mod mcp;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
