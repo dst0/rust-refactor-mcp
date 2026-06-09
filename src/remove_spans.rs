@@ -1,5 +1,5 @@
 use crate::collapse_blank_lines::collapse_blank_lines;
-use crate::bytespan::ByteSpan;
+use crate::extract::ByteSpan;
 /// Remove multiple sorted, non-overlapping byte spans from source text.
 /// Preserves whitespace and comments outside the spans.
 /// Spans must be sorted by start position and must not overlap.
@@ -10,7 +10,8 @@ pub fn remove_spans(source: &str, spans: &[ByteSpan]) -> String {
     for i in 1..spans.len() {
         assert!(
             spans[i - 1].end <= spans[i].start,
-            "Spans must be sorted and non-overlapping: {} overlaps with {}", spans[i -
+            "Spans must be sorted and non-overlapping: {:?} overlaps with {:?}",
+ spans[i -
             1], spans[i]
         );
     }

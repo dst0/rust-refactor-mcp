@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use proc_macro2::Span;
 use syn::Item;
+use crate::extract::to_snake_case;
 /// Backward compat: text-based parent mod update (kept for external callers).
 pub fn update_parent_mod(target_folder: &str, entity_name: &str) {
     let mut module_file = PathBuf::from(target_folder).join("lib.rs");
@@ -17,7 +18,7 @@ pub fn update_parent_mod(target_folder: &str, entity_name: &str) {
     let Ok(parsed) = syn::parse_file(&content) else {
         return;
     };
-    let mod_name = entity_name.to_lowercase();
+    let mod_name = to_snake_case(entity_name);
     let mod_ident = syn::Ident::new(&mod_name, Span::call_site());
     for item in &parsed.items {
         if let Item::Mod(m) = item {

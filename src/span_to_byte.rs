@@ -1,5 +1,5 @@
 use crate::line_col_to_byte::line_col_to_byte;
-use crate::bytespan::ByteSpan;
+use crate::extract::ByteSpan;
 pub fn span_to_byte(span: &proc_macro2::Span, source: &str) -> ByteSpan {
     let start = span.start();
     let end = span.end();
