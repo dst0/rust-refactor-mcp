@@ -428,7 +428,7 @@ pub fn update_usage_files(
                     new_mod: new_module.clone(),
                     changed: false,
                 };
-                replacer.visit_file_mut(&mut parsed);
+                syn::visit_mut::VisitMut::visit_file_mut(&mut replacer, &mut parsed);
                 if replacer.changed {
                     changed = true;
                 }
