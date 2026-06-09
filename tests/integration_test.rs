@@ -13,8 +13,11 @@ fn copy_fixture() -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let tmp = std::env::temp_dir()
-        .join(format!("rust_refactor_integration_{}_{}", std::process::id(), ts));
+    let tmp = std::env::temp_dir().join(format!(
+        "rust_refactor_integration_{}_{}",
+        std::process::id(),
+        ts
+    ));
     std::fs::create_dir_all(&tmp).unwrap();
     cp_r(fixture_dir(), &tmp);
     tmp
@@ -41,7 +44,10 @@ fn cargo_check(project_dir: &PathBuf) -> bool {
         .output()
         .unwrap();
     if !output.status.success() {
-        eprintln!("cargo check failed:\n{}", String::from_utf8_lossy(&output.stderr));
+        eprintln!(
+            "cargo check failed:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
     output.status.success()
 }
@@ -68,7 +74,10 @@ fn extract_point_from_simple() {
     let project = copy_fixture();
     let src_dir = project.join("src");
 
-    assert!(cargo_check(&project), "Fixture should compile before extraction");
+    assert!(
+        cargo_check(&project),
+        "Fixture should compile before extraction"
+    );
 
     let file_path = src_dir.join("simple.rs");
     run_extract(
@@ -101,7 +110,11 @@ fn extract_point_from_simple() {
     assert!(lib_content.contains("pub mod point"));
 
     // Project compiles after extraction
-    assert!(cargo_check(&project), "Project should compile after extraction\nsimple.rs:\n{}", simple_content);
+    assert!(
+        cargo_check(&project),
+        "Project should compile after extraction\nsimple.rs:\n{}",
+        simple_content
+    );
 
     std::fs::remove_dir_all(&project).ok();
 }
@@ -111,7 +124,10 @@ fn extract_user_from_user() {
     let project = copy_fixture();
     let src_dir = project.join("src");
 
-    assert!(cargo_check(&project), "Fixture should compile before extraction");
+    assert!(
+        cargo_check(&project),
+        "Fixture should compile before extraction"
+    );
 
     let file_path = src_dir.join("user.rs");
     run_extract(
@@ -138,7 +154,10 @@ fn extract_user_from_user() {
     let lib_content = fs::read_to_string(src_dir.join("lib.rs")).unwrap();
     assert!(lib_content.contains("pub mod user"));
 
-    assert!(cargo_check(&project), "Project should compile after User extraction");
+    assert!(
+        cargo_check(&project),
+        "Project should compile after User extraction"
+    );
     std::fs::remove_dir_all(&project).ok();
 }
 
@@ -147,7 +166,10 @@ fn extract_status_from_medium() {
     let project = copy_fixture();
     let src_dir = project.join("src");
 
-    assert!(cargo_check(&project), "Fixture should compile before extraction");
+    assert!(
+        cargo_check(&project),
+        "Fixture should compile before extraction"
+    );
 
     let file_path = src_dir.join("medium.rs");
     run_extract(
@@ -174,6 +196,9 @@ fn extract_status_from_medium() {
     assert!(!medium_content.contains("pub enum Status"));
     assert!(medium_content.contains("pub struct UserBuilder"));
 
-    assert!(cargo_check(&project), "Project should compile after Status extraction");
+    assert!(
+        cargo_check(&project),
+        "Project should compile after Status extraction"
+    );
     std::fs::remove_dir_all(&project).ok();
 }

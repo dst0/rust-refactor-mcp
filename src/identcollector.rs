@@ -14,7 +14,12 @@ impl<'a> Visit<'a> for IdentCollector {
         syn::visit::visit_expr_method_call(self, i);
     }
     fn visit_attribute(&mut self, attr: &'a syn::Attribute) {
-        self.found.insert(attr.path().get_ident().map(|id| id.to_string()).unwrap_or_default());
+        self.found.insert(
+            attr.path()
+                .get_ident()
+                .map(|id| id.to_string())
+                .unwrap_or_default(),
+        );
         match &attr.meta {
             syn::Meta::Path(_) => {}
             syn::Meta::List(list) => {

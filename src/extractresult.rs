@@ -20,10 +20,3 @@ pub struct ExtractResult {
     pub usage_files_updated: Vec<String>,
     pub extracted_spans: Vec<ByteSpan>,
 }
-
-#[derive(Debug, Serialize)]
-pub struct SplitResult {
-    pub file_path: String,
-    pub extracted_entities: Vec<ExtractResult>,
-    pub errors: Vec<String>,
-}

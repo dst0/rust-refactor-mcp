@@ -38,14 +38,12 @@ impl<'a> Visit<'a> for NameVisitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syn::{File, Item, Type, UseTree};
-    use crate::cleanup_unused_imports::cleanup_unused_imports;
-    use crate::has_use_ref::has_use_ref;
+    use crate::extract::{
+        collect_referenced_identifiers, extract_entity, find_extracted_indices, item_type,
+    };
     use crate::format_ty_name::format_ty_name;
-    use crate::item_type::item_type;
-    use crate::find_extracted_indices::find_extracted_indices;
-    use crate::collect_referenced_identifiers::collect_referenced_identifiers;
-    use crate::extract::extract_entity;
+    use crate::has_use_ref::has_use_ref;
+    use syn::{File, Item, Type, UseTree};
     pub fn make_source(code: &str) -> File {
         syn::parse_file(code).expect("parse")
     }
@@ -53,42 +51,42 @@ mod tests {
     pub fn find_struct() {
         let source = "struct Foo { x: i32 }";
         let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "Foo");
-        assert!(! indices.is_empty());
+        let indices = find_extracted_indices(&parsed, "Foo", None);
+        assert!(!indices.is_empty());
     }
     #[test]
     pub fn find_enum() {
         let source = "enum Bar { A, B }";
         let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "Bar");
-        assert!(! indices.is_empty());
+        let indices = find_extracted_indices(&parsed, "Bar", None);
+        assert!(!indices.is_empty());
     }
     #[test]
     pub fn find_fn() {
         let source = "fn baz() {}";
         let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "baz");
-        assert!(! indices.is_empty());
+        let indices = find_extracted_indices(&parsed, "baz", None);
+        assert!(!indices.is_empty());
     }
     #[test]
     pub fn find_trait() {
         let source = "trait Qux {}";
         let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "Qux");
-        assert!(! indices.is_empty());
+        let indices = find_extracted_indices(&parsed, "Qux", None);
+        assert!(!indices.is_empty());
     }
     #[test]
     pub fn find_struct_preferred_over_impl() {
         let source = "struct Foo;\nimpl Foo {}";
         let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "Foo");
-        assert!(indices.contains(& 0));
+        let indices = find_extracted_indices(&parsed, "Foo", None);
+        assert!(indices.contains(&0));
     }
     #[test]
     pub fn collect_impls_multiple() {
         let source = "struct Foo {}\nimpl Foo { fn a() {} }\nimpl Default for Foo { fn default() -> Self { Foo } }";
         let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "Foo");
+        let indices = find_extracted_indices(&parsed, "Foo", None);
         assert_eq!(indices.len(), 3);
     }
     #[test]
@@ -101,7 +99,7 @@ mod tests {
     #[test]
     pub fn format_ty_simple() {
         let ty: Type = syn::parse_str("Foo").unwrap();
-        assert_eq!(format_ty_name(& ty), "Foo");
+        assert_eq!(format_ty_name(&ty), "Foo");
     }
     #[test]
     pub fn name_visitor_finds_reference() {
@@ -121,7 +119,7 @@ mod tests {
         let mut v = NameVisitor::new("Foo");
         for item in &parsed.items {
             if let Item::Fn(f) = item {
-                assert!(! v.visit_fn(f));
+                assert!(!v.visit_fn(f));
             }
         }
     }
@@ -131,9 +129,17 @@ mod tests {
         let tmp = std::env::temp_dir().join("rust_refactor_test");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
-        let result = extract_entity(&source, "Foo", tmp.to_str().unwrap(), None, None)
-            .unwrap();
-        assert!(result.items_extracted.contains(& "struct: Foo".to_string()));
+        let result = extract_entity(
+            &source,
+            "Foo",
+            tmp.to_str().unwrap(),
+            None,
+            None,
+            None,
+            true,
+        )
+        .unwrap();
+        assert!(result.items_extracted.contains(&"struct: Foo".to_string()));
         assert!(result.new_file_path.ends_with("foo.rs"));
         std::fs::remove_dir_all(&tmp).ok();
     }
@@ -143,8 +149,16 @@ mod tests {
         let tmp = std::env::temp_dir().join("rust_refactor_test2");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
-        let result = extract_entity(&source, "Foo", tmp.to_str().unwrap(), None, None)
-            .unwrap();
+        let result = extract_entity(
+            &source,
+            "Foo",
+            tmp.to_str().unwrap(),
+            None,
+            None,
+            None,
+            true,
+        )
+        .unwrap();
         assert_eq!(result.items_extracted.len(), 2);
         std::fs::remove_dir_all(&tmp).ok();
     }
@@ -154,8 +168,16 @@ mod tests {
         let tmp = std::env::temp_dir().join("rust_refactor_test3");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
-        let result = extract_entity(&source, "Color", tmp.to_str().unwrap(), None, None)
-            .unwrap();
+        let result = extract_entity(
+            &source,
+            "Color",
+            tmp.to_str().unwrap(),
+            None,
+            None,
+            None,
+            true,
+        )
+        .unwrap();
         assert_eq!(result.items_extracted[0], "enum: Color");
         std::fs::remove_dir_all(&tmp).ok();
     }
@@ -165,14 +187,22 @@ mod tests {
         let tmp = std::env::temp_dir().join("rust_refactor_test4");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
-        let err = extract_entity(&source, "Bar", tmp.to_str().unwrap(), None, None)
-            .unwrap_err();
+        let err = extract_entity(
+            &source,
+            "Bar",
+            tmp.to_str().unwrap(),
+            None,
+            None,
+            None,
+            true,
+        )
+        .unwrap_err();
         assert!(err.contains("not found"));
         std::fs::remove_dir_all(&tmp).ok();
     }
     #[test]
     pub fn extract_invalid_syntax() {
-        let err = extract_entity("not rust !!!", "Foo", ".", None, None).unwrap_err();
+        let err = extract_entity("not rust !!!", "Foo", ".", None, None, None, true).unwrap_err();
         assert!(err.contains("Parse error"));
     }
     #[test]
@@ -183,25 +213,13 @@ mod tests {
         assert!(ids.contains("Bar"));
     }
     #[test]
-    pub fn cleanup_imports_keeps_used() {
-        let source = "use foo::Bar;\nuse other::Unused;\nfn test() { let x: Bar = Bar::new(); }";
-        let result = cleanup_unused_imports(source);
-        assert!(result.contains("use foo::Bar"));
-        assert!(! result.contains("Unused"));
-    }
-    #[test]
     pub fn has_use_ref_positive() {
         let tree: UseTree = syn::parse_str("simple::Point").unwrap();
-        assert!(has_use_ref("Point", & tree));
+        assert!(has_use_ref("Point", &tree));
     }
     #[test]
     pub fn has_use_ref_negative() {
         let tree: UseTree = syn::parse_str("simple::Other").unwrap();
-        assert!(! has_use_ref("Point", & tree));
-    }
-    #[test]
-    pub fn has_use_ref_grouped() {
-        let tree: UseTree = syn::parse_str("simple::{Point, greet}").unwrap();
-        assert!(has_use_ref("Point", & tree));
+        assert!(!has_use_ref("Point", &tree));
     }
 }

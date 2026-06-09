@@ -24,7 +24,7 @@ Every tool or feature undergoes this mandatory cycle before being considered com
 - [x] Entity type filtering
 - [x] **Wiring MCP to Pi CLI**
 - [x] `macro_expander` improvements (robustness)
-- [ ] `preflight_validator` (Verification Loop)
-- [ ] `dependency_graph_analyzer` (Coupling awareness)
-- [ ] `semantic_dead_code_finder` (Safe deletions)
+- [x] `preflight_validator` (Verification Loop)
+- [x] `dependency_graph_analyzer` (Coupling awareness)
+- [x] `semantic_dead_code_finder` (Safe deletions)
 - [ ] `llm-orc` UI Rework (Resume work)

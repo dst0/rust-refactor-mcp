@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use proc_macro2::Span;
-use syn::Item;
 use crate::extract::to_snake_case;
+use proc_macro2::Span;
+use std::path::PathBuf;
+use syn::Item;
 /// Backward compat: text-based parent mod update (kept for external callers).
 pub fn update_parent_mod(target_folder: &str, entity_name: &str) {
     let mut module_file = PathBuf::from(target_folder).join("lib.rs");

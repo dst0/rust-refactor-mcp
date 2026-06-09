@@ -1,8 +1,8 @@
 use std::process::Command;
 
 /// Expand macros for a given target in the crate.
-/// 
-/// The target can be a specific item (e.g., `my_module::my_function`) 
+///
+/// The target can be a specific item (e.g., `my_module::my_function`)
 /// or a file path depending on how `cargo-expand` is configured.
 pub fn expand_macros(target: &str) -> Result<String, String> {
     // Attempt to run cargo expand.

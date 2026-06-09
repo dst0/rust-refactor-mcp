@@ -1,5 +1,5 @@
-use syn::{visit::Visit, File, Path};
 use std::collections::{HashMap, HashSet};
+use syn::{visit::Visit, File, Path};
 
 pub struct DependencyGraph {
     pub deps: HashMap<String, HashSet<String>>,

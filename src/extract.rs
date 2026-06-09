@@ -1,12 +1,12 @@
-use syn::visit::Visit;
-use crate::update_parent_mod::update_parent_mod;
-use crate::merge_spans::merge_spans;
 use crate::identcollector::IdentCollector;
+use crate::merge_spans::merge_spans;
+use crate::update_parent_mod::update_parent_mod;
+use proc_macro2::Span;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
-use proc_macro2::Span;
 use syn::spanned::Spanned;
+use syn::visit::Visit;
 use syn::{File, Item, ItemFn, ItemUse, Type, UseTree};
 pub fn extract_entity(
     source: &str,
@@ -20,7 +20,10 @@ pub fn extract_entity(
     let parsed = syn::parse_file(source).map_err(|e| format!("Parse error: {}", e))?;
     let extracted_indices = find_extracted_indices(&parsed, entity_name, entity_types.as_deref());
     if extracted_indices.is_empty() {
-        return Err(format!("Entity '{}' of types {:?} not found", entity_name, entity_types));
+        return Err(format!(
+            "Entity '{}' of types {:?} not found",
+            entity_name, entity_types
+        ));
     }
     let mut remaining = Vec::new();
     let mut extracted: Vec<Item> = Vec::new();
@@ -56,11 +59,11 @@ pub fn extract_entity(
         items_extracted.push(format!("test: {}", tfn.sig.ident));
     }
     let new_module = to_snake_case(entity_name);
-    let source_stem = source_file_path
-        .as_ref()
-        .and_then(|p| {
-            PathBuf::from(p).file_stem().map(|s| s.to_string_lossy().to_string())
-        });
+    let source_stem = source_file_path.as_ref().and_then(|p| {
+        PathBuf::from(p)
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+    });
     let same_file = source_stem.as_deref() == Some(&new_module);
     let new_path = PathBuf::from(target_folder).join(format!("{}.rs", new_module));
     let new_file_path = if same_file {
@@ -69,11 +72,7 @@ pub fn extract_entity(
         new_path.to_string_lossy().to_string()
     };
     if !same_file {
-        let needed_imports = detect_needed_imports_for_extracted(
-            &parsed,
-            &extracted,
-            entity_name,
-        );
+        let needed_imports = detect_needed_imports_for_extracted(&parsed, &extracted, entity_name);
         let mut new_file = File {
             shebang: parsed.shebang.clone(),
             attrs: parsed.attrs.clone(),
@@ -87,12 +86,8 @@ pub fn extract_entity(
             make_item_pub(&mut item);
             new_file.items.push(item);
         }
-        let cross_refs = detect_cross_refs_for_extracted(
-            &parsed,
-            &extracted,
-            entity_name,
-            source_file_path,
-        );
+        let cross_refs =
+            detect_cross_refs_for_extracted(&parsed, &extracted, entity_name, source_file_path);
         for imp in cross_refs {
             new_file.items.push(Item::Use(imp));
         }
@@ -102,7 +97,11 @@ pub fn extract_entity(
             .map_err(|e| format!("Cannot create dir: {}", e))?;
         let content = prettyplease::unparse(&new_file);
         fs::write(&new_path, content).map_err(|e| format!("Cannot write file: {}", e))?;
-        let _ = std::process::Command::new("rustfmt").arg("--edition").arg("2024").arg(&new_path).status();
+        let _ = std::process::Command::new("rustfmt")
+            .arg("--edition")
+            .arg("2024")
+            .arg(&new_path)
+            .status();
     }
     let test_file_path = if !test_items.is_empty() {
         let mut test_content = String::from("#[cfg(test)]\nmod tests {\n");
@@ -120,7 +119,11 @@ pub fn extract_entity(
         let test_path = PathBuf::from(target_folder).join(&test_filename);
         fs::write(&test_path, &test_content)
             .map_err(|e| format!("Cannot write test file: {}", e))?;
-        let _ = std::process::Command::new("rustfmt").arg("--edition").arg("2024").arg(&test_path).status();
+        let _ = std::process::Command::new("rustfmt")
+            .arg("--edition")
+            .arg("2024")
+            .arg(&test_path)
+            .status();
         Some(test_path.to_string_lossy().to_string())
     } else {
         None
@@ -162,8 +165,12 @@ pub fn extract_entity(
         let updated_content = prettyplease::unparse(&cleaned);
         fs::write(source_file_path.unwrap_or("source.rs"), &updated_content)
             .map_err(|e| format!("Cannot write updated source: {}", e))?;
-        let _ = std::process::Command::new("rustfmt").arg("--edition").arg("2024").arg(source_file_path.unwrap_or("source.rs")).status();
-        
+        let _ = std::process::Command::new("rustfmt")
+            .arg("--edition")
+            .arg("2024")
+            .arg(source_file_path.unwrap_or("source.rs"))
+            .status();
+
         let usage_updated = update_usage_files(
             target_folder,
             entity_name,
@@ -190,7 +197,11 @@ pub fn extract_entity(
     }
 }
 
-pub fn find_extracted_indices(parsed: &File, entity_name: &str, entity_types: Option<&[String]>) -> HashSet<usize> {
+pub fn find_extracted_indices(
+    parsed: &File,
+    entity_name: &str,
+    entity_types: Option<&[String]>,
+) -> HashSet<usize> {
     let mut indices = HashSet::new();
     for (idx, item) in parsed.items.iter().enumerate() {
         if let Some(et) = entity_types {
@@ -271,19 +282,17 @@ pub fn is_import_used(names: &[String], used_ids: &HashSet<String>) -> bool {
 }
 pub fn cleanup_imports_in_ast(parsed: &File, used_ids: &HashSet<String>) -> File {
     let mut cleaned = parsed.clone();
-    cleaned
-        .items
-        .retain(|item| {
-            if let Item::Use(iu) = item {
-                if !matches!(iu.vis, syn::Visibility::Inherited) {
-                    return true;
-                }
-                let names = collect_use_names(&iu.tree);
-                is_import_used(&names, used_ids)
-            } else {
-                true
+    cleaned.items.retain(|item| {
+        if let Item::Use(iu) = item {
+            if !matches!(iu.vis, syn::Visibility::Inherited) {
+                return true;
             }
-        });
+            let names = collect_use_names(&iu.tree);
+            is_import_used(&names, used_ids)
+        } else {
+            true
+        }
+    });
     cleaned
 }
 pub fn detect_needed_imports_for_extracted(
@@ -291,15 +300,19 @@ pub fn detect_needed_imports_for_extracted(
     _extracted: &[Item],
     _entity_name: &str,
 ) -> Vec<ItemUse> {
-    parsed.items.iter().filter_map(|item| {
-        if let Item::Use(iu) = item {
-            let mut new_iu = iu.clone();
-            transform_self_to_crate(&mut new_iu.tree);
-            Some(new_iu)
-        } else {
-            None
-        }
-    }).collect()
+    parsed
+        .items
+        .iter()
+        .filter_map(|item| {
+            if let Item::Use(iu) = item {
+                let mut new_iu = iu.clone();
+                transform_self_to_crate(&mut new_iu.tree);
+                Some(new_iu)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 pub fn transform_self_to_crate(root_tree: &mut UseTree) {
@@ -312,11 +325,11 @@ pub fn transform_self_to_crate(root_tree: &mut UseTree) {
                     stack.push((&mut p.tree, false));
                 } else if is_leading && p.ident == "super" {
                     let old_tree = p.tree.clone();
-                    p.tree = Box::new(UseTree::Path(syn::UsePath {
+                    *p.tree = UseTree::Path(syn::UsePath {
                         ident: syn::Ident::new("super", Span::call_site()),
                         colon2_token: syn::token::PathSep::default(),
                         tree: old_tree,
-                    }));
+                    });
                     if let UseTree::Path(ref mut inner_p) = *p.tree {
                         stack.push((&mut inner_p.tree, false));
                     }
@@ -360,7 +373,9 @@ pub fn detect_cross_refs_for_extracted(
     }
     let module_name = source_file_path
         .and_then(|p| {
-            PathBuf::from(p).file_stem().and_then(|s| s.to_str().map(|s| s.to_string()))
+            PathBuf::from(p)
+                .file_stem()
+                .and_then(|s| s.to_str().map(|s| s.to_string()))
         })
         .unwrap_or_else(|| "super".to_string());
     let names = needed.join(", ");
@@ -396,9 +411,14 @@ pub fn update_usage_files(
     let total_files = files_to_process.len();
     for (i, path) in files_to_process.into_iter().enumerate() {
         use std::io::Write;
-        print!("\r    Usage scan: {}/{} files (processing: {})             ", i, total_files, path.file_name().unwrap_or_default().to_string_lossy());
+        print!(
+            "\r    Usage scan: {}/{} files (processing: {})             ",
+            i,
+            total_files,
+            path.file_name().unwrap_or_default().to_string_lossy()
+        );
         std::io::stdout().flush().ok();
-        
+
         if let Some(ref ex) = exclude_canonical {
             if let Ok(p_can) = fs::canonicalize(&path) {
                 if p_can == *ex {
@@ -406,17 +426,18 @@ pub fn update_usage_files(
                 }
             }
         }
-        if path.file_stem().map(|s| s.to_string_lossy()) == Some(to_snake_case(entity_name).into()) {
+        if path.file_stem().map(|s| s.to_string_lossy()) == Some(to_snake_case(entity_name).into())
+        {
             continue;
         }
         let file_content = match std::fs::read_to_string(&path) {
             Ok(c) => c,
             Err(_) => continue,
         };
-        
+
         // Fast check before parsing
         if !file_content.contains(entity_name) {
-             continue;
+            continue;
         }
 
         let mut parsed = match syn::parse_file(&file_content) {
@@ -522,18 +543,17 @@ fn collect_rs_files(dir: PathBuf, files: &mut Vec<PathBuf>) {
 }
 pub fn format_ty_name(ty: &Type) -> String {
     match ty {
-        Type::Path(tp) => {
-            tp.path
-                .get_ident()
-                .map(|i| i.to_string())
-                .unwrap_or_else(|| {
-                    tp.path
-                        .segments
-                        .last()
-                        .map(|s| s.ident.to_string())
-                        .unwrap_or_default()
-                })
-        }
+        Type::Path(tp) => tp
+            .path
+            .get_ident()
+            .map(|i| i.to_string())
+            .unwrap_or_else(|| {
+                tp.path
+                    .segments
+                    .last()
+                    .map(|s| s.ident.to_string())
+                    .unwrap_or_default()
+            }),
         _ => format!("{:?}", ty),
     }
 }
@@ -635,7 +655,8 @@ pub fn collect_use_names(tree: &UseTree) -> Vec<String> {
 }
 
 pub fn make_item_pub(item: &mut Item) {
-    if !matches!(get_item_vis(item), Some(syn::Visibility::Inherited)) && get_item_vis(item).is_some()
+    if !matches!(get_item_vis(item), Some(syn::Visibility::Inherited))
+        && get_item_vis(item).is_some()
     {
         return;
     }
@@ -733,8 +754,9 @@ pub struct QualPathReplacer {
 }
 impl VisitMut for QualPathReplacer {
     fn visit_path_mut(&mut self, i: &mut syn::Path) {
-        if i.segments.len() == 2 && i.segments[0].ident == self.old_mod && i.segments[1]
-            .ident == self.entity_name
+        if i.segments.len() == 2
+            && i.segments[0].ident == self.old_mod
+            && i.segments[1].ident == self.entity_name
         {
             i.segments[0].ident = syn::Ident::new(&self.new_mod, i.segments[0].ident.span());
             self.changed = true;
@@ -765,7 +787,7 @@ pub fn get_full_module_path(target_folder: &str, new_module: &str) -> String {
     let mut path = PathBuf::from(target_folder);
     let mut components = Vec::new();
     components.push(new_module.to_string());
-    
+
     while let Some(parent) = path.parent() {
         if path.file_name().and_then(|s| s.to_str()) == Some("src") {
             break;
