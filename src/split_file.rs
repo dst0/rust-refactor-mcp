@@ -9,6 +9,7 @@ pub fn split_file(
     file_path: &str, 
     target_folder: &str,
     cached_files: Option<&Vec<PathBuf>>,
+    generate_reexport: bool,
 ) -> Result<Vec<String>, String> {
     let initial_source = fs::read_to_string(file_path).map_err(|e| e.to_string())?;
     let parsed = parse_file(&initial_source).map_err(|e| e.to_string())?;
@@ -74,6 +75,7 @@ pub fn split_file(
             itype, 
             Some(file_path),
             cached_files,
+            generate_reexport,
         );
 
         match result {
@@ -88,7 +90,7 @@ pub fn split_file(
     Ok(extracted_files)
 }
 
-pub fn split_directory(dir_path: &str) -> Result<(), String> {
+pub fn split_directory(dir_path: &str, generate_reexport: bool) -> Result<(), String> {
     println!("Scanning directory {}...", dir_path);
     let mut files = Vec::new();
     collect_rs_files_internal(PathBuf::from(dir_path), &mut files);
@@ -108,7 +110,7 @@ pub fn split_directory(dir_path: &str) -> Result<(), String> {
         print!("\r[{}/{}] Processing {}...          ", idx + 1, total_files, file_str);
         use std::io::Write;
         std::io::stdout().flush().ok();
-        match split_file(&file_str, &target_folder, Some(&files)) {
+        match split_file(&file_str, &target_folder, Some(&files), generate_reexport) {
             Ok(extracted) => {
                 if !extracted.is_empty() {
                     println!("Processed {}: extracted {} entities", file_str, extracted.len());

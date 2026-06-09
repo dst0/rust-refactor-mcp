@@ -16,6 +16,7 @@ pub fn extract_entity(
     _entity_type: Option<&str>,
     source_file_path: Option<&str>,
     cached_files: Option<&Vec<PathBuf>>,
+    generate_reexport: bool,
 ) -> Result<ExtractResult, String> {
     let parsed = syn::parse_file(source).map_err(|e| format!("Parse error: {}", e))?;
     let extracted_indices = find_extracted_indices(&parsed, entity_name);
@@ -146,7 +147,7 @@ pub fn extract_entity(
             }
         }
 
-        if used_ids.contains(entity_name) || is_pub {
+        if generate_reexport && (used_ids.contains(entity_name) || is_pub) {
             let full_mod_path = get_full_module_path(target_folder, &new_module);
             let vis_prefix = if is_pub { "pub " } else { "" };
             let use_str = format!("{}use {}::{};", vis_prefix, full_mod_path, entity_name);

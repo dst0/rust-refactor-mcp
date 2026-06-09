@@ -9,6 +9,7 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
             let entity_name = args.get("entity_name").and_then(Value::as_str).ok_or("entity_name is required")?;
             let target_folder = args.get("target_folder").and_then(Value::as_str).ok_or("target_folder is required")?;
             let entity_type = args.get("entity_type").and_then(Value::as_str);
+            let generate_reexport = args.get("generate_reexport").and_then(Value::as_bool).unwrap_or(true);
             let source = std::fs::read_to_string(file_path).map_err(|e| format!("Cannot read file: {}", e))?;
             let result = crate::extract::extract_entity(
                 &source,
@@ -17,6 +18,7 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
                 entity_type,
                 Some(file_path),
                 None,
+                generate_reexport,
             )?;
             Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : format!("Extracted {} → {}\nItems: {}", entity_name, result.new_file_path, result.items_extracted.join(", ")) }] } }))
         }
