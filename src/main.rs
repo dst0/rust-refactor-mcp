@@ -26,6 +26,7 @@ pub mod extract;
 pub mod format_code;
 pub mod rename_entity;
 pub mod fix_cargo;
+pub mod optimize_imports;
 mod mcp;
 fn main() {
     let args: Vec<String> = std::env::args().collect();

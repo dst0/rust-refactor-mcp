@@ -44,6 +44,13 @@ pub fn cli_main(args: &[String]) {
         println!("{}", result);
         return;
     }
+
+    if cmd_or_entity == "OPTIMIZE_IMPORTS" {
+        let target_file = args.get(2).expect("Missing target_file");
+        let result = crate::optimize_imports::optimize_imports(target_file).expect("Optimize imports failed");
+        println!("{}", result);
+        return;
+    }
     
     if cmd_or_entity == "FIX_CARGO" {
         let manifest_path = args.get(2).expect("Missing manifest_path");

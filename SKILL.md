@@ -44,6 +44,13 @@ Runs `cargo fix` on a project to resolve auto-fixable errors.
 | :--- | :--- | :--- |
 | `manifest_path` | yes | Path to `Cargo.toml`. |
 
+### 5. `optimize_imports`
+Optimizes and sorts imports in a Rust file using `rustfmt`.
+
+| Parameter | Required | Description |
+| :--- | :--- | :--- |
+| `file_path` | yes | Path to source `.rs` file. |
+
 ---
 
 ## CLI-Only Commands (Bulk Automation)

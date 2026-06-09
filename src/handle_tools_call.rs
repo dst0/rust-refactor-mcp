@@ -39,6 +39,11 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
             let result = crate::fix_cargo::fix_cargo_errors(manifest_path)?;
             Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : result }] } }))
         }
+        "optimize_imports" => {
+            let file_path = args.get("file_path").and_then(Value::as_str).ok_or("file_path is required")?;
+            let result = crate::optimize_imports::optimize_imports(file_path)?;
+            Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : result }] } }))
+        }
         _ => Err(format!("Unknown tool: {}", name)),
     }
 }
