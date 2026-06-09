@@ -1,3 +1,4 @@
+pub mod update_parent_mod;
 pub mod merge_spans;
 pub mod namevisitor;
 pub mod identcollector;
