@@ -1,4 +1,5 @@
 use syn::{visit_mut::{self, VisitMut}, Expr, Type, File};
+use quote::quote;
 
 pub struct SSRVisitor {
     pub pattern: String,
@@ -8,22 +9,27 @@ pub struct SSRVisitor {
 
 impl VisitMut for SSRVisitor {
     fn visit_expr_mut(&mut self, i: &mut Expr) {
-        // Simple SSR: if the expression matches the pattern, replace it
-        let expr_str = quote::quote!(#i).to_string();
-        if expr_str == self.pattern {
-            let replacement: Expr = syn::parse_str(&self.replacement).unwrap();
-            *i = replacement;
-            self.changed = true;
+        let expr_str = quote!(#i).to_string().replace(" ", "");
+        let pattern_str = self.pattern.replace(" ", "");
+        
+        if expr_str == pattern_str {
+            if let Ok(replacement) = syn::parse_str::<Expr>(&self.replacement) {
+                *i = replacement;
+                self.changed = true;
+            }
         }
         visit_mut::visit_expr_mut(self, i);
     }
 
     fn visit_type_mut(&mut self, i: &mut Type) {
-        let type_str = quote::quote!(#i).to_string();
-        if type_str == self.pattern {
-            let replacement: Type = syn::parse_str(&self.replacement).unwrap();
-            *i = replacement;
-            self.changed = true;
+        let type_str = quote!(#i).to_string().replace(" ", "");
+        let pattern_str = self.pattern.replace(" ", "");
+        
+        if type_str == pattern_str {
+            if let Ok(replacement) = syn::parse_str::<Type>(&self.replacement) {
+                *i = replacement;
+                self.changed = true;
+            }
         }
         visit_mut::visit_type_mut(self, i);
     }
