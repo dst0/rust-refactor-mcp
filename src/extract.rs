@@ -1,7 +1,6 @@
 use syn::visit::Visit;
 use crate::update_parent_mod::update_parent_mod;
 use crate::merge_spans::merge_spans;
-use crate::namevisitor::NameVisitor;
 use crate::identcollector::IdentCollector;
 use std::collections::HashSet;
 use std::fs;
@@ -19,9 +18,9 @@ pub fn extract_entity(
     generate_reexport: bool,
 ) -> Result<ExtractResult, String> {
     let parsed = syn::parse_file(source).map_err(|e| format!("Parse error: {}", e))?;
-    let extracted_indices = find_extracted_indices(&parsed, entity_name);
+    let extracted_indices = find_extracted_indices(&parsed, entity_name, _entity_type);
     if extracted_indices.is_empty() {
-        return Err(format!("Entity '{}' not found", entity_name));
+        return Err(format!("Entity '{}' of type {:?} not found", entity_name, _entity_type));
     }
     let mut remaining = Vec::new();
     let mut extracted: Vec<Item> = Vec::new();
@@ -76,8 +75,8 @@ pub fn extract_entity(
             entity_name,
         );
         let mut new_file = File {
-            shebang: None,
-            attrs: Vec::new(),
+            shebang: parsed.shebang.clone(),
+            attrs: parsed.attrs.clone(),
             items: Vec::new(),
         };
         for imp in &needed_imports {
@@ -191,9 +190,14 @@ pub fn extract_entity(
     }
 }
 
-pub fn find_extracted_indices(parsed: &File, entity_name: &str) -> HashSet<usize> {
+pub fn find_extracted_indices(parsed: &File, entity_name: &str, entity_type: Option<&str>) -> HashSet<usize> {
     let mut indices = HashSet::new();
     for (idx, item) in parsed.items.iter().enumerate() {
+        if let Some(et) = entity_type {
+            if item_type(item) != et {
+                continue;
+            }
+        }
         match item {
             Item::Struct(s) if s.ident == entity_name => {
                 indices.insert(idx);
@@ -221,23 +225,9 @@ pub fn find_extracted_indices(parsed: &File, entity_name: &str) -> HashSet<usize
                 if self_ty_name == entity_name {
                     indices.insert(idx);
                 } else if let Some((_, tr_path, _)) = &imp.trait_ {
-                    // Check if entity name is in the trait path, e.g. From<Entity>
                     let tr_str = quote::quote!(# tr_path).to_string();
                     if tr_str.contains(entity_name) {
                         indices.insert(idx);
-                    }
-                }
-            }
-            Item::Mod(mod_item) => {
-                if mod_item.attrs.iter().any(|a| a.path().is_ident("cfg")) {
-                    if let Some((_brace, items)) = &mod_item.content {
-                        for inner in items {
-                            if let Item::Fn(test_fn) = inner {
-                                if NameVisitor::new(entity_name).visit_fn(test_fn) {
-                                    indices.insert(idx);
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -298,43 +288,18 @@ pub fn cleanup_imports_in_ast(parsed: &File, used_ids: &HashSet<String>) -> File
 }
 pub fn detect_needed_imports_for_extracted(
     parsed: &File,
-    extracted: &[Item],
+    _extracted: &[Item],
     _entity_name: &str,
 ) -> Vec<ItemUse> {
-    let used = collect_referenced_identifiers(extracted);
-    let mut needed = Vec::new();
-    for item in &parsed.items {
+    parsed.items.iter().filter_map(|item| {
         if let Item::Use(iu) = item {
-            let names = collect_use_names(&iu.tree);
-            let mut include = false;
-            if names.iter().any(|n| used.contains(n.as_str()) && n != _entity_name) {
-                include = true;
-            }
-            // Special case for traits
-            if !include {
-                for name in &names {
-                    if name == "Visit" && used.iter().any(|id| id.starts_with("visit_")) {
-                        include = true;
-                        break;
-                    }
-                    if name == "VisitMut" && used.iter().any(|id| id.starts_with("visit_")) {
-                        include = true;
-                        break;
-                    }
-                    if name == "Spanned" && used.contains("span") {
-                        include = true;
-                        break;
-                    }
-                }
-            }
-            if include {
-                let mut new_iu = iu.clone();
-                transform_self_to_crate(&mut new_iu.tree);
-                needed.push(new_iu);
-            }
+            let mut new_iu = iu.clone();
+            transform_self_to_crate(&mut new_iu.tree);
+            Some(new_iu)
+        } else {
+            None
         }
-    }
-    needed
+    }).collect()
 }
 
 pub fn transform_self_to_crate(root_tree: &mut UseTree) {

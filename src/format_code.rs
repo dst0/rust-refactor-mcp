@@ -1,5 +1,4 @@
 use std::process::Command;
-use std::path::Path;
 
 pub fn format_code(path: &str) -> Result<String, String> {
     let status = Command::new("rustfmt")
