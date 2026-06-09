@@ -51,6 +51,15 @@ Optimizes and sorts imports in a Rust file using `rustfmt`.
 | :--- | :--- | :--- |
 | `file_path` | yes | Path to source `.rs` file. |
 
+### 6. `ssr`
+Performs structural search and replace on Rust source code.
+
+| Parameter | Required | Description |
+| :--- | :--- | :--- |
+| `file_path` | yes | Path to source `.rs` file. |
+| `pattern` | yes | AST pattern to match. |
+| `replacement` | yes | AST replacement pattern. |
+
 ---
 
 ## CLI-Only Commands (Bulk Automation)

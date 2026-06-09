@@ -38,6 +38,14 @@ pub fn cli_main(args: &[String]) {
         return;
     }
     
+    if cmd_or_entity == "SSR" {
+        let pattern = args.get(2).expect("Missing pattern");
+        let replacement = args.get(3).expect("Missing replacement");
+        let result = crate::ssr::ssr(file_path, pattern, replacement).expect("SSR failed");
+        println!("SSR on {}: {} -> {} (Changed: {})", file_path, pattern, replacement, result);
+        return;
+    }
+    
     if cmd_or_entity == "FORMAT" {
         let target_file = args.get(2).expect("Missing target_file");
         let result = crate::format_code::format_code(target_file).expect("Format failed");

@@ -44,6 +44,13 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
             let result = crate::optimize_imports::optimize_imports(file_path)?;
             Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : result }] } }))
         }
+        "ssr" => {
+            let file_path = args.get("file_path").and_then(Value::as_str).ok_or("file_path is required")?;
+            let pattern = args.get("pattern").and_then(Value::as_str).ok_or("pattern is required")?;
+            let replacement = args.get("replacement").and_then(Value::as_str).ok_or("replacement is required")?;
+            let changed = crate::ssr::ssr(file_path, pattern, replacement)?;
+            Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : format!("SSR on {}: {} -> {} (Changed: {})", file_path, pattern, replacement, changed) }] } }))
+        }
         _ => Err(format!("Unknown tool: {}", name)),
     }
 }
