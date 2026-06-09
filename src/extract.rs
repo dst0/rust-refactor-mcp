@@ -15,6 +15,7 @@ pub fn extract_entity(
     target_folder: &str,
     _entity_type: Option<&str>,
     source_file_path: Option<&str>,
+    cached_files: Option<&Vec<PathBuf>>,
 ) -> Result<ExtractResult, String> {
     let parsed = syn::parse_file(source).map_err(|e| format!("Parse error: {}", e))?;
     let extracted_indices = find_extracted_indices(&parsed, entity_name);
@@ -159,7 +160,13 @@ pub fn extract_entity(
         let updated_content = prettyplease::unparse(&cleaned);
         fs::write(source_file_path.unwrap_or("source.rs"), &updated_content)
             .map_err(|e| format!("Cannot write updated source: {}", e))?;
-        let usage_updated = update_usage_files(target_folder, entity_name, source_stem.as_deref(), source_file_path)?;
+        let usage_updated = update_usage_files(
+            target_folder,
+            entity_name,
+            source_stem.as_deref(),
+            source_file_path,
+            cached_files,
+        )?;
         update_parent_mod(target_folder, entity_name);
         Ok(ExtractResult {
             new_file_path,
@@ -195,8 +202,26 @@ pub fn find_extracted_indices(parsed: &File, entity_name: &str) -> HashSet<usize
             Item::Trait(t) if t.ident == entity_name => {
                 indices.insert(idx);
             }
-            Item::Impl(imp) if format_ty_name(&imp.self_ty) == entity_name => {
+            Item::Type(t) if t.ident == entity_name => {
                 indices.insert(idx);
+            }
+            Item::Const(c) if c.ident == entity_name => {
+                indices.insert(idx);
+            }
+            Item::Static(s) if s.ident == entity_name => {
+                indices.insert(idx);
+            }
+            Item::Impl(imp) => {
+                let self_ty_name = format_ty_name(&imp.self_ty);
+                if self_ty_name == entity_name {
+                    indices.insert(idx);
+                } else if let Some((_, tr_path, _)) = &imp.trait_ {
+                    // Check if entity name is in the trait path, e.g. From<Entity>
+                    let tr_str = quote::quote!(# tr_path).to_string();
+                    if tr_str.contains(entity_name) {
+                        indices.insert(idx);
+                    }
+                }
             }
             Item::Mod(mod_item) => {
                 if mod_item.attrs.iter().any(|a| a.path().is_ident("cfg")) {
@@ -307,28 +332,35 @@ pub fn detect_needed_imports_for_extracted(
     needed
 }
 
-pub fn transform_self_to_crate(tree: &mut UseTree) {
-    match tree {
-        UseTree::Path(p) => {
-            if p.ident == "self" {
-                p.ident = syn::Ident::new("crate", p.ident.span());
-            } else if p.ident == "super" {
-                 p.ident = syn::Ident::new("super", p.ident.span());
-                 let old_tree = p.tree.clone();
-                 p.tree = Box::new(UseTree::Path(syn::UsePath {
-                     ident: syn::Ident::new("super", Span::call_site()),
-                     colon2_token: syn::token::PathSep::default(),
-                     tree: old_tree,
-                 }));
+pub fn transform_self_to_crate(root_tree: &mut UseTree) {
+    let mut stack = vec![(root_tree, true)];
+    while let Some((tree, is_leading)) = stack.pop() {
+        match tree {
+            UseTree::Path(p) => {
+                if is_leading && p.ident == "self" {
+                    p.ident = syn::Ident::new("crate", p.ident.span());
+                    stack.push((&mut p.tree, false));
+                } else if is_leading && p.ident == "super" {
+                    let old_tree = p.tree.clone();
+                    p.tree = Box::new(UseTree::Path(syn::UsePath {
+                        ident: syn::Ident::new("super", Span::call_site()),
+                        colon2_token: syn::token::PathSep::default(),
+                        tree: old_tree,
+                    }));
+                    if let UseTree::Path(ref mut inner_p) = *p.tree {
+                        stack.push((&mut inner_p.tree, false));
+                    }
+                } else {
+                    stack.push((&mut p.tree, false));
+                }
             }
-            transform_self_to_crate(&mut p.tree);
-        }
-        UseTree::Group(g) => {
-            for item in &mut g.items {
-                transform_self_to_crate(item);
+            UseTree::Group(g) => {
+                for item in &mut g.items {
+                    stack.push((item, is_leading));
+                }
             }
+            _ => {}
         }
-        _ => {}
     }
 }
 pub fn detect_cross_refs_for_extracted(
@@ -380,13 +412,23 @@ pub fn update_usage_files(
     entity_name: &str,
     old_module_hint: Option<&str>,
     exclude_path: Option<&str>,
+    cached_files: Option<&Vec<PathBuf>>,
 ) -> Result<Vec<String>, String> {
     let mut updated = Vec::new();
     let exclude_canonical = exclude_path.and_then(|p| fs::canonicalize(p).ok());
     let mut files_to_process = Vec::new();
-    collect_rs_files(PathBuf::from(target_folder), &mut files_to_process);
+    if let Some(cached) = cached_files {
+        files_to_process = cached.clone();
+    } else {
+        collect_rs_files(PathBuf::from(target_folder), &mut files_to_process);
+    }
 
-    for path in files_to_process {
+    let total_files = files_to_process.len();
+    for (i, path) in files_to_process.into_iter().enumerate() {
+        use std::io::Write;
+        print!("\r    Usage scan: {}/{} files (processing: {})             ", i, total_files, path.file_name().unwrap_or_default().to_string_lossy());
+        std::io::stdout().flush().ok();
+        
         if let Some(ref ex) = exclude_canonical {
             if let Ok(p_can) = fs::canonicalize(&path) {
                 if p_can == *ex {
@@ -401,6 +443,12 @@ pub fn update_usage_files(
             Ok(c) => c,
             Err(_) => continue,
         };
+        
+        // Fast check before parsing
+        if !file_content.contains(entity_name) {
+             continue;
+        }
+
         let mut parsed = match syn::parse_file(&file_content) {
             Ok(p) => p,
             Err(_) => continue,
@@ -481,6 +529,9 @@ pub fn update_usage_files(
             updated.push(path.to_string_lossy().to_string());
         }
     }
+    if total_files > 10 {
+        println!("\r    Usage scan: done ({} files searched)                                                    ", total_files);
+    }
     Ok(updated)
 }
 
@@ -523,6 +574,9 @@ pub fn item_type(item: &Item) -> &'static str {
         Item::Fn(_) => "fn",
         Item::Trait(_) => "trait",
         Item::Impl(_) => "impl",
+        Item::Const(_) => "const",
+        Item::Static(_) => "static",
+        Item::Type(_) => "type",
         _ => "item",
     }
 }
@@ -720,6 +774,9 @@ impl VisitMut for QualPathReplacer {
 }
 
 pub fn to_snake_case(s: &str) -> String {
+    if s.chars().all(|c| !c.is_alphabetic() || c.is_uppercase()) {
+        return s.to_lowercase();
+    }
     let mut snake = String::new();
     for (i, c) in s.chars().enumerate() {
         if c.is_uppercase() {

@@ -3,7 +3,18 @@
 MCP server that extracts named entities from Rust source into dedicated module files.
 One entity per file. Zero re-export index files. Cross-file `use` updates included.
 
-## Tool: `extract_entity`
+## Features
+
+- **Entity Extraction**: Surgically extract a single `struct`, `enum`, `fn`, `trait`, `const`, `static`, or `type` from a file.
+- **Dependency Aware**: Preserves associated `impl` blocks and necessary `use` statements.
+- **Intelligent Routing**: Converts `self::` and `super::` imports automatically into absolute `crate::` paths when shifting module structures. Iterative AST parsing prevents stack overflows.
+- **Automated Batch Splitting**: Commands to completely split a file or an entire directory recursively into a "one entity per file" architecture.
+- **Fast Global Updates**: Automatically updates usage (`use crate::...`) in sibling and descendant files using pre-filtered fast-string matching to scale to large codebases instantly.
+- **Tests Follow Code**: `#[cfg(test)]` modules that reference an extracted entity are automatically moved to a corresponding `{name}_tests.rs` file.
+
+## Tools (MCP)
+
+### `extract_entity`
 
 | Parameter       | Required | Description                             |
 |-----------------|----------|-----------------------------------------|
@@ -12,30 +23,37 @@ One entity per file. Zero re-export index files. Cross-file `use` updates includ
 | `target_folder` | yes      | Output directory for new module         |
 | `entity_type`   | no       | Hint: `struct`, `enum`, `fn`, `trait`  |
 
-### What it does
+## CLI Usage
 
-1. Parse source → find entity by name via `syn` AST
-2. Collect entity + all related `impl` blocks
-3. Extract `#[cfg(test)]` modules that reference the entity → `{name}_tests.rs`
-4. Write `{name}.rs` (and `_tests.rs` if any) to `target_folder`
-5. Scan sibling files for `use` references → update module paths
-6. Surgically remove extracted byte spans from source
-7. Return: new file paths, items extracted, usage files updated
+The executable can be used directly as a CLI for immediate codebase refactoring.
 
-## Usage
-
+### Single Entity Extraction
 ```bash
-# CLI
-cargo run -- file.rs MyStruct ./src
-
-# MCP stdio
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"extract_entity","arguments":{"file_path":"file.rs","entity_name":"MyStruct","target_folder":"./src"}}}' \
-  | cargo run --release
+cargo run -- <file.rs> <EntityName> <target_dir> [entity_type]
+# Example:
+# cargo run -- src/repos/requests.rs RequestsRepo ./src/repos
 ```
 
-## Conventions
+### Auto-Split a Single File
+Automatically finds all entities in a file, determines the safest topological dependency order, and extracts them one by one into individual files.
+```bash
+cargo run -- <file.rs> SPLIT <target_dir>
+# Example:
+# cargo run -- src/repos/leases.rs SPLIT src/repos/
+```
+
+### Auto-Split an Entire Directory
+Recursively scans a directory for `.rs` files and runs the `SPLIT` operation on all of them, ignoring crate/module roots (`lib.rs`, `mod.rs`, `main.rs`). Progress is tracked in-place in the terminal.
+```bash
+cargo run -- SPLIT_DIR <target_dir>
+# Example:
+# cargo run -- SPLIT_DIR src/repos/
+```
+
+## Conventions Enforced
 
 - **One entity per file** — no bundling
+- **Snake_case filenames** — e.g. `MyStruct` becomes `my_struct.rs`
 - **No re-export index files** — never create mod.rs that only re-exports
 - **Tests travel with entities** — extracted to `{entity}_tests.rs`
 - **Cross-file updates** — `use` paths updated in all affected files

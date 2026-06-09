@@ -22,6 +22,7 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
         target_folder,
         entity_type,
         Some(file_path),
+        None,
     )?;
     Ok(
         json!(
