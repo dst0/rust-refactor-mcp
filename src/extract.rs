@@ -308,6 +308,12 @@ impl<'a> Visit<'a> for IdentCollector {
         self.found.insert(id.to_string());
         syn::visit::visit_ident(self, id);
     }
+
+    fn visit_expr_method_call(&mut self, i: &'a syn::ExprMethodCall) {
+        self.found.insert(i.method.to_string());
+        syn::visit::visit_expr_method_call(self, i);
+    }
+
     fn visit_type(&mut self, ty: &'a Type) {
         syn::visit::visit_type(self, ty);
     }
@@ -347,16 +353,28 @@ impl IdentCollector {
 
 // ── Import cleanup (AST-based) ─────────────────────────────────────
 
+fn is_import_used(names: &[String], used_ids: &HashSet<String>) -> bool {
+    for name in names {
+        if used_ids.contains(name) {
+            return true;
+        }
+        // Special case for traits whose methods are used but trait name is not explicitly mentioned
+        if name == "Spanned" && used_ids.contains("span") {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn cleanup_unused_imports(source: &str) -> String {
     let Ok(mut parsed) = syn::parse_file(source) else {
         return source.to_string();
     };
     let used = collect_referenced_identifiers(&parsed.items);
-    // Remove use items that import nothing used
     parsed.items.retain(|item| {
         if let Item::Use(iu) = item {
             let names = collect_use_names(&iu.tree);
-            names.iter().any(|n| used.contains(n.as_str()))
+            is_import_used(&names, &used)
         } else {
             true
         }
@@ -369,7 +387,7 @@ fn cleanup_imports_in_ast(parsed: &File, used_ids: &HashSet<String>) -> File {
     cleaned.items.retain(|item| {
         if let Item::Use(iu) = item {
             let names = collect_use_names(&iu.tree);
-            names.iter().any(|n| used_ids.contains(n.as_str()) || n == "Spanned")
+            is_import_used(&names, used_ids)
         } else {
             true
         }
@@ -483,8 +501,10 @@ fn update_usage_files(
                 new_items.retain(|item| {
                     if let Item::Use(iu) = item {
                         let names = collect_use_names(&iu.tree);
-                        names.iter().any(|n| used.contains(n.as_str()))
-                    } else { true }
+                        is_import_used(&names, &used)
+                    } else {
+                        true
+                    }
                 });
 
                 let final_file = syn::File { shebang: None, attrs: Vec::new(), items: new_items };
