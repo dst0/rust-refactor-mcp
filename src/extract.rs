@@ -126,6 +126,15 @@ pub fn extract_entity(
         None
     };
     if !same_file {
+        let used_by_extracted = collect_referenced_identifiers(&extracted);
+        for item in &mut remaining {
+            if let Some(name) = get_item_name(item) {
+                if used_by_extracted.contains(&name) {
+                    make_item_pub(item);
+                }
+            }
+        }
+
         let used_ids = collect_referenced_identifiers(&remaining);
         if used_ids.contains(entity_name) {
             let new_mod_ident = syn::Ident::new(&new_module, Span::call_site());
@@ -369,11 +378,40 @@ pub fn update_usage_files(
                 Ok(c) => c,
                 Err(_) => continue,
             };
-            let Ok(parsed) = syn::parse_file(&file_content) else {
-                continue;
+            let mut parsed = match syn::parse_file(&file_content) {
+                Ok(p) => p,
+                Err(_) => continue,
             };
             let new_module = entity_name.to_lowercase();
             let mut changed = false;
+
+            // Handle qualified calls like mcp::run_server
+            // We need to know the old module name. For now assume target_folder base
+            // or just check all segments[0] that match a module that had this entity.
+            // Simplified: if we find Item::Use(mcp::run_server), we know 'mcp' is the old mod.
+            let mut old_mod = None;
+            for item in &parsed.items {
+                if let Item::Use(iu) = item {
+                    if has_use_ref(entity_name, &iu.tree) {
+                         old_mod = Some(extract_module_path(&iu.tree, entity_name));
+                         break;
+                    }
+                }
+            }
+
+            if let Some(om) = old_mod {
+                let mut replacer = QualPathReplacer {
+                    old_mod: om,
+                    entity_name: entity_name.to_string(),
+                    new_mod: new_module.clone(),
+                    changed: false,
+                };
+                replacer.visit_file(&mut parsed);
+                if replacer.changed {
+                    changed = true;
+                }
+            }
+
             let mut new_items: Vec<Item> = Vec::new();
             for item in parsed.items {
                 match &item {
@@ -584,5 +622,37 @@ pub fn make_item_pub(item: &mut Item) {
         Item::Static(s) => s.vis = pub_vis,
         Item::Mod(m) => m.vis = pub_vis,
         _ => {}
+    }
+}
+
+pub fn get_item_name(item: &Item) -> Option<String> {
+    match item {
+        Item::Fn(f) => Some(f.sig.ident.to_string()),
+        Item::Struct(s) => Some(s.ident.to_string()),
+        Item::Enum(e) => Some(e.ident.to_string()),
+        Item::Trait(t) => Some(t.ident.to_string()),
+        Item::Type(t) => Some(t.ident.to_string()),
+        Item::Const(c) => Some(c.ident.to_string()),
+        Item::Static(s) => Some(s.ident.to_string()),
+        _ => None,
+    }
+}
+
+use syn::visit_mut::{self, VisitMut};
+pub struct QualPathReplacer {
+    pub old_mod: String,
+    pub entity_name: String,
+    pub new_mod: String,
+    pub changed: bool,
+}
+impl VisitMut for QualPathReplacer {
+    fn visit_path(&mut self, i: &mut syn::Path) {
+        if i.segments.len() == 2 && i.segments[0].ident == self.old_mod && i.segments[1]
+            .ident == self.entity_name
+        {
+            i.segments[0].ident = syn::Ident::new(&self.new_mod, i.segments[0].ident.span());
+            self.changed = true;
+        }
+        visit_mut::visit_path(self, i);
     }
 }
