@@ -102,6 +102,7 @@ pub fn extract_entity(
             .map_err(|e| format!("Cannot create dir: {}", e))?;
         let content = prettyplease::unparse(&new_file);
         fs::write(&new_path, content).map_err(|e| format!("Cannot write file: {}", e))?;
+        let _ = std::process::Command::new("rustfmt").arg(&new_path).status();
     }
     let test_file_path = if !test_items.is_empty() {
         let mut test_content = String::from("#[cfg(test)]\nmod tests {\n");
@@ -119,6 +120,7 @@ pub fn extract_entity(
         let test_path = PathBuf::from(target_folder).join(&test_filename);
         fs::write(&test_path, &test_content)
             .map_err(|e| format!("Cannot write test file: {}", e))?;
+        let _ = std::process::Command::new("rustfmt").arg(&test_path).status();
         Some(test_path.to_string_lossy().to_string())
     } else {
         None
@@ -160,6 +162,8 @@ pub fn extract_entity(
         let updated_content = prettyplease::unparse(&cleaned);
         fs::write(source_file_path.unwrap_or("source.rs"), &updated_content)
             .map_err(|e| format!("Cannot write updated source: {}", e))?;
+        let _ = std::process::Command::new("rustfmt").arg(source_file_path.unwrap_or("source.rs")).status();
+        
         let usage_updated = update_usage_files(
             target_folder,
             entity_name,
