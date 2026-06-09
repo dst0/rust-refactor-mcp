@@ -1,3 +1,4 @@
+use crate::merge_spans::merge_spans;
 use crate::namevisitor::NameVisitor;
 use crate::identcollector::IdentCollector;
 use crate::bytespan::ByteSpan;
@@ -9,7 +10,6 @@ use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 use syn::{File, Item, ItemFn, ItemUse, Type, UseTree};
-use crate::spans::merge_spans;
 pub fn extract_entity(
     source: &str,
     entity_name: &str,

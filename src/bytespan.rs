@@ -1,3 +1,4 @@
+use crate::merge_spans::merge_spans;
 use std::fmt;
 /// A byte-range within a source file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,4 +191,5 @@ mod tests {
         assert_eq!(r, vec![ByteSpan::new(0, 10), ByteSpan::new(20, 30)]);
     }
 }
-use crate::spans::{remove_spans, merge_spans, collapse_blank_lines};
+use crate::spans::remove_spans;
+use crate::spans::collapse_blank_lines;

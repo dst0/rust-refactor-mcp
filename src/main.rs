@@ -1,3 +1,4 @@
+pub mod merge_spans;
 pub mod namevisitor;
 pub mod identcollector;
 pub mod bytespan;
