@@ -1,3 +1,4 @@
+pub mod identcollector;
 pub mod bytespan;
 pub mod extractresult;
 pub mod spans;
