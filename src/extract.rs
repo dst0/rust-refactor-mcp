@@ -227,6 +227,9 @@ pub fn update_parent_mod(target_folder: &str, entity_name: &str) {
     if !module_file.exists() {
         module_file = PathBuf::from(target_folder).join("mod.rs");
     }
+    if !module_file.exists() {
+        module_file = PathBuf::from(target_folder).join("main.rs");
+    }
     let content = match std::fs::read_to_string(&module_file) {
         Ok(c) => c, Err(_) => return,
     };
@@ -366,7 +369,7 @@ fn cleanup_imports_in_ast(parsed: &File, used_ids: &HashSet<String>) -> File {
     cleaned.items.retain(|item| {
         if let Item::Use(iu) = item {
             let names = collect_use_names(&iu.tree);
-            names.iter().any(|n| used_ids.contains(n.as_str()))
+            names.iter().any(|n| used_ids.contains(n.as_str()) || n == "Spanned")
         } else {
             true
         }
