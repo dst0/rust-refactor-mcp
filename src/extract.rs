@@ -12,15 +12,15 @@ pub fn extract_entity(
     source: &str,
     entity_name: &str,
     target_folder: &str,
-    _entity_type: Option<&str>,
+    entity_types: Option<Vec<String>>,
     source_file_path: Option<&str>,
     cached_files: Option<&Vec<PathBuf>>,
     generate_reexport: bool,
 ) -> Result<ExtractResult, String> {
     let parsed = syn::parse_file(source).map_err(|e| format!("Parse error: {}", e))?;
-    let extracted_indices = find_extracted_indices(&parsed, entity_name, _entity_type);
+    let extracted_indices = find_extracted_indices(&parsed, entity_name, entity_types.as_deref());
     if extracted_indices.is_empty() {
-        return Err(format!("Entity '{}' of type {:?} not found", entity_name, _entity_type));
+        return Err(format!("Entity '{}' of types {:?} not found", entity_name, entity_types));
     }
     let mut remaining = Vec::new();
     let mut extracted: Vec<Item> = Vec::new();
@@ -190,11 +190,11 @@ pub fn extract_entity(
     }
 }
 
-pub fn find_extracted_indices(parsed: &File, entity_name: &str, entity_type: Option<&str>) -> HashSet<usize> {
+pub fn find_extracted_indices(parsed: &File, entity_name: &str, entity_types: Option<&[String]>) -> HashSet<usize> {
     let mut indices = HashSet::new();
     for (idx, item) in parsed.items.iter().enumerate() {
-        if let Some(et) = entity_type {
-            if item_type(item) != et {
+        if let Some(et) = entity_types {
+            if !et.contains(&item_type(item).to_string()) {
                 continue;
             }
         }

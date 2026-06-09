@@ -67,6 +67,21 @@ Expands procedural macros for a given target.
 | :--- | :--- | :--- |
 | `target` | yes | Target module or item to expand. |
 
+### 8. `discover_multi_entity_files`
+Recursively scans a directory for files containing multiple Rust entities.
+
+| Parameter | Required | Description |
+| :--- | :--- | :--- |
+| `dir_path` | yes | Path to directory to scan. |
+
+### 9. `split_folder_entities`
+Recursively scans a directory and splits all multi-entity files into single-entity files.
+
+| Parameter | Required | Description |
+| :--- | :--- | :--- |
+| `dir_path` | yes | Path to directory to scan. |
+| `generate_reexport` | no | Default: `true`. Set `false` to disable `pub use` re-exports. |
+
 ---
 
 ## CLI-Only Commands (Bulk Automation)

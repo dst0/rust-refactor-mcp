@@ -1,4 +1,6 @@
 use serde_json::{json, Value};
+use std::collections::HashMap;
+
 pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, String> {
     let name = params.get("name").and_then(Value::as_str).ok_or("Missing tool name")?;
     let args = params.get("arguments").ok_or("Missing arguments")?;
@@ -8,14 +10,14 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
             let file_path = args.get("file_path").and_then(Value::as_str).ok_or("file_path is required")?;
             let entity_name = args.get("entity_name").and_then(Value::as_str).ok_or("entity_name is required")?;
             let target_folder = args.get("target_folder").and_then(Value::as_str).ok_or("target_folder is required")?;
-            let entity_type = args.get("entity_type").and_then(Value::as_str);
+            let entity_types = args.get("entity_types").and_then(Value::as_array).map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect());
             let generate_reexport = args.get("generate_reexport").and_then(Value::as_bool).unwrap_or(true);
             let source = std::fs::read_to_string(file_path).map_err(|e| format!("Cannot read file: {}", e))?;
             let result = crate::extract::extract_entity(
                 &source,
                 entity_name,
                 target_folder,
-                entity_type,
+                entity_types,
                 Some(file_path),
                 None,
                 generate_reexport,
@@ -56,6 +58,19 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
             let result = crate::macro_expander::expand_macros(target)?;
             Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : result }] } }))
         }
+        "split_folder_entities" => {
+            let dir_path = args.get("dir_path").and_then(Value::as_str).ok_or("dir_path is required")?;
+            let generate_reexport = args.get("generate_reexport").and_then(Value::as_bool).unwrap_or(true);
+            let entity_types = args.get("entity_types").and_then(Value::as_array).map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect());
+            crate::split_file::split_folder_entities(dir_path, generate_reexport, entity_types).map_err(|e| e.to_string())?;
+            Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : format!("Successfully split directory: {}", dir_path) }] } }))
+        }
+        "discover_multi_entity_files" => {
+            let dir_path = args.get("dir_path").and_then(Value::as_str).ok_or("dir_path is required")?;
+            let files = crate::split_file::discover_multi_entity_files(dir_path).map_err(|e| e.to_string())?;
+            let result_map: HashMap<String, usize> = files.into_iter().map(|(k, v)| (k.to_string_lossy().to_string(), v)).collect();
+            Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : serde_json::to_string_pretty(&result_map).unwrap() }] } }))
+        }
         _ => Err(format!("Unknown tool: {}", name)),
     }
 }
@@ -76,8 +91,10 @@ mod tests {
     fn tools_list() {
         let resp = handle_tools_list(&None);
         let tools = resp["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0] ["name"], "extract_entity");
+        // This test might fail now because I added many tools.
+        // I need to adjust it to check for existence, not exact length.
+        assert!(tools.len() >= 1);
+        assert!(tools.iter().any(|t| t["name"] == "extract_entity"));
     }
     #[test]
     fn tools_call_missing_file_path() {

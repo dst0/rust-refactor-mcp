@@ -2,7 +2,7 @@ use crate::extract::{extract_entity, get_item_name, item_type, to_snake_case};
 use crate::dependency_graph::DependencyGraph;
 use syn::{parse_file, Item};
 use std::fs;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::path::PathBuf;
 
 pub fn split_file(
@@ -10,6 +10,7 @@ pub fn split_file(
     target_folder: &str,
     cached_files: Option<&Vec<PathBuf>>,
     generate_reexport: bool,
+    entity_types: Option<Vec<String>>,
 ) -> Result<Vec<String>, String> {
     let initial_source = fs::read_to_string(file_path).map_err(|e| e.to_string())?;
     let parsed = parse_file(&initial_source).map_err(|e| e.to_string())?;
@@ -59,20 +60,30 @@ pub fn split_file(
         
         // We need to know the type for the first item matching this name
         let current_parsed = parse_file(&current_source).map_err(|e| e.to_string())?;
-        let itype = current_parsed.items.iter()
-            .find(|item| get_item_name(item).as_deref() == Some(&name))
-            .map(|item| item_type(item));
+        let items: Vec<Item> = current_parsed.items.iter()
+            .filter(|item| get_item_name(item).as_deref() == Some(&name))
+            .cloned()
+            .collect();
 
-        if itype.is_none() {
+        if items.is_empty() {
             // Might have been extracted as part of another entity (e.g. if it was an impl)
             continue;
+        }
+
+        let itypes: Vec<String> = items.iter().map(|item| item_type(item).to_string()).collect();
+        
+        // Filter by types if provided
+        if let Some(ref filter_types) = entity_types {
+            if !itypes.iter().any(|t| filter_types.contains(t)) {
+                continue;
+            }
         }
 
         let result = extract_entity(
             &current_source, 
             &name, 
             target_folder, 
-            itype, 
+            Some(itypes),
             Some(file_path),
             cached_files,
             generate_reexport,
@@ -90,14 +101,34 @@ pub fn split_file(
     Ok(extracted_files)
 }
 
-pub fn split_directory(dir_path: &str, generate_reexport: bool) -> Result<(), String> {
-    println!("Scanning directory {}...", dir_path);
+pub fn discover_multi_entity_files(dir_path: &str) -> Result<HashMap<PathBuf, usize>, String> {
     let mut files = Vec::new();
     collect_rs_files_internal(PathBuf::from(dir_path), &mut files);
-    println!("Found {} .rs files.", files.len());
+    let mut multi_entity = HashMap::new();
+
+    for file in files {
+        let file_str = fs::read_to_string(&file).map_err(|e| e.to_string())?;
+        if let Ok(parsed) = parse_file(&file_str) {
+            let count = parsed.items.iter()
+                .filter(|item| !matches!(item, Item::Use(_) | Item::ExternCrate(_) | Item::Macro(_)))
+                .count();
+            if count > 1 {
+                multi_entity.insert(file, count);
+            }
+        }
+    }
+    Ok(multi_entity)
+}
+
+pub fn split_folder_entities(dir_path: &str, generate_reexport: bool, entity_types: Option<Vec<String>>) -> Result<(), String> {
+    println!("Discovering multi-entity files in {}...", dir_path);
+    let multi_entity = discover_multi_entity_files(dir_path)?;
+    println!("Found {} files with multiple entities.", multi_entity.len());
     
-    let total_files = files.len();
-    for (idx, file) in files.iter().enumerate() {
+    let all_files: Vec<PathBuf> = multi_entity.keys().cloned().collect();
+    let total_files = multi_entity.len();
+
+    for (idx, (file, count)) in multi_entity.into_iter().enumerate() {
         let file_str = file.to_string_lossy().to_string();
         let target_folder = file.parent().unwrap().to_string_lossy().to_string();
         
@@ -107,17 +138,18 @@ pub fn split_directory(dir_path: &str, generate_reexport: bool) -> Result<(), St
             continue;
         }
 
-        print!("\r[{}/{}] Processing {}...          ", idx + 1, total_files, file_str);
+        print!("\r[{}/{}] Splitting {} ({} entities)...          ", idx + 1, total_files, file_str, count);
         use std::io::Write;
         std::io::stdout().flush().ok();
-        match split_file(&file_str, &target_folder, Some(&files), generate_reexport) {
+        
+        match split_file(&file_str, &target_folder, Some(&all_files), generate_reexport, entity_types.clone()) {
             Ok(extracted) => {
                 if !extracted.is_empty() {
-                    println!("Processed {}: extracted {} entities", file_str, extracted.len());
+                    println!("\nProcessed {}: extracted {} entities", file_str, extracted.len());
                 }
             }
             Err(e) => {
-                println!("Error splitting {}: {}", file_str, e);
+                println!("\nError splitting {}: {}", file_str, e);
             }
         }
     }

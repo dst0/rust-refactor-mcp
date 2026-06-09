@@ -1,5 +1,6 @@
 use syn::{parse_file, visit_mut::VisitMut, Ident};
 use std::fs;
+use std::path::PathBuf;
 
 pub struct Renamer {
     pub old_name: String,
@@ -25,9 +26,23 @@ pub fn rename_entity(file_path: &str, old_name: &str, new_name: &str) -> Result<
         changed: false,
     };
     renamer.visit_file_mut(&mut parsed);
+    
     if renamer.changed {
         let new_content = prettyplease::unparse(&parsed);
         fs::write(file_path, new_content).map_err(|e| e.to_string())?;
+        
+        // Handle file renaming if file matches entity name
+        let path = PathBuf::from(file_path);
+        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+            if stem == crate::extract::to_snake_case(old_name) {
+                let new_filename = format!("{}.rs", crate::extract::to_snake_case(new_name));
+                let new_path = path.with_file_name(new_filename);
+                fs::rename(&path, &new_path).map_err(|e| e.to_string())?;
+                // Note: Usage updates are complex; for now, we rely on the user or future MCP tooling
+                // to handle renaming in usage files.
+            }
+        }
+        let _ = std::process::Command::new("rustfmt").args(["--edition", "2024", file_path]).status();
         Ok(true)
     } else {
         Ok(false)

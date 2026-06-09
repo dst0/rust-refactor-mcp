@@ -1,5 +1,5 @@
 use crate::extract::extract_entity;
-use crate::split_file::{split_file, split_directory};
+use crate::split_file::{split_file, split_folder_entities};
 use crate::rename_entity::rename_entity;
 
 pub fn cli_main(args: &[String]) {
@@ -12,7 +12,8 @@ pub fn cli_main(args: &[String]) {
     if first == "SPLIT_DIR" {
         let dir_path = args.get(1).expect("Missing dir_path");
         let generate_reexport = !args.contains(&"--no-reexport".to_string());
-        split_directory(dir_path, generate_reexport).expect("Split directory failed");
+        let entity_types = args.iter().find(|a| a.starts_with("--types=")).map(|a| a.trim_start_matches("--types=").split(',').map(|s| s.to_string()).collect());
+        split_folder_entities(dir_path, generate_reexport, entity_types).expect("Split directory failed");
         return;
     }
 
@@ -30,19 +31,12 @@ pub fn cli_main(args: &[String]) {
     if cmd_or_entity == "SPLIT" {
         let target_folder = args.get(2).expect("Missing target_folder");
         let generate_reexport = !args.contains(&"--no-reexport".to_string());
-        let results = split_file(file_path, target_folder, None, generate_reexport).expect("Split failed");
+        let entity_types = args.iter().find(|a| a.starts_with("--types=")).map(|a| a.trim_start_matches("--types=").split(',').map(|s| s.to_string()).collect());
+        let results = split_file(file_path, target_folder, None, generate_reexport, entity_types).expect("Split failed");
         println!("Split {} into:", file_path);
         for path in results {
             println!("  {}", path);
         }
-        return;
-    }
-    
-    if cmd_or_entity == "SSR" {
-        let pattern = args.get(2).expect("Missing pattern");
-        let replacement = args.get(3).expect("Missing replacement");
-        let result = crate::ssr::ssr(file_path, pattern, replacement).expect("SSR failed");
-        println!("SSR on {}: {} -> {} (Changed: {})", file_path, pattern, replacement, result);
         return;
     }
     
@@ -74,9 +68,17 @@ pub fn cli_main(args: &[String]) {
         return;
     }
 
+    if cmd_or_entity == "SSR" {
+        let pattern = args.get(2).expect("Missing pattern");
+        let replacement = args.get(3).expect("Missing replacement");
+        let result = crate::ssr::ssr(file_path, pattern, replacement).expect("SSR failed");
+        println!("SSR on {}: {} -> {} (Changed: {})", file_path, pattern, replacement, result);
+        return;
+    }
+
     let entity_name = cmd_or_entity;
     let target_folder = args.get(2).expect("Missing target_folder");
-    let entity_type = args.get(3).map(|s| s.as_str());
+    let entity_types = args.iter().find(|a| a.starts_with("--types=")).map(|a| a.trim_start_matches("--types=").split(',').map(|s| s.to_string()).collect());
     let generate_reexport = !args.contains(&"--no-reexport".to_string());
 
     let source = std::fs::read_to_string(file_path).expect("Cannot read file");
@@ -84,7 +86,7 @@ pub fn cli_main(args: &[String]) {
             &source,
             entity_name,
             target_folder,
-            entity_type,
+            entity_types,
             Some(file_path),
             None,
             generate_reexport,

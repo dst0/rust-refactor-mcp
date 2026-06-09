@@ -1,17 +1,16 @@
 use serde_json::{json, Value};
 pub fn handle_tools_list(id: &Option<Value>) -> Value {
     json!(
-        { "jsonrpc" : "2.0", "id" : id, "result" : { "tools" : [{ "name" :
-        "extract_entity", "description" :
-        "Extract a named entity (struct, enum, trait, fn, impl) from a Rust source file into its own module file. Related impl blocks and test modules are extracted together. Cross-file use statements are updated automatically.",
-        "inputSchema" : { "type" : "object", "properties" : { "file_path" : { "type" :
-        "string", "description" : "Path to the Rust source file containing the entity" },
-        "entity_name" : { "type" : "string", "description" :
-        "Name of the entity to extract" }, "target_folder" : { "type" : "string",
-        "description" : "Directory where the new module file will be written" },
-        "entity_type" : { "type" : "string", "description" :
-        "Hint for entity type: struct, enum, fn, trait, impl", "enum" : ["struct",
-        "enum", "fn", "trait", "impl"] } }, "required" : ["file_path", "entity_name",
-        "target_folder"] } }] } }
+        { "jsonrpc" : "2.0", "id" : id, "result" : { "tools" : [
+        { "name" : "extract_entity", "description" : "Extract a named entity from a Rust source file.", "inputSchema" : { "type" : "object", "properties" : { "file_path" : { "type" : "string" }, "entity_name" : { "type" : "string" }, "target_folder" : { "type" : "string" }, "entity_types" : { "type" : "array", "items": { "type": "string" } }, "generate_reexport": { "type": "boolean" } }, "required" : ["file_path", "entity_name", "target_folder"] } },
+        { "name" : "format_code", "description" : "Format a Rust file.", "inputSchema" : { "type" : "object", "properties" : { "file_path" : { "type" : "string" } }, "required" : ["file_path"] } },
+        { "name" : "rename_entity", "description" : "Rename an entity.", "inputSchema" : { "type" : "object", "properties" : { "file_path" : { "type" : "string" }, "old_name" : { "type" : "string" }, "new_name" : { "type" : "string" } }, "required" : ["file_path", "old_name", "new_name"] } },
+        { "name" : "fix_cargo_errors", "description" : "Run cargo fix.", "inputSchema" : { "type" : "object", "properties" : { "manifest_path" : { "type" : "string" } }, "required" : ["manifest_path"] } },
+        { "name" : "optimize_imports", "description" : "Optimize imports.", "inputSchema" : { "type" : "object", "properties" : { "file_path" : { "type" : "string" } }, "required" : ["file_path"] } },
+        { "name" : "ssr", "description" : "Structural search and replace.", "inputSchema" : { "type" : "object", "properties" : { "file_path" : { "type" : "string" }, "pattern" : { "type" : "string" }, "replacement" : { "type" : "string" } }, "required" : ["file_path", "pattern", "replacement"] } },
+        { "name" : "expand_macros", "description" : "Expand macros.", "inputSchema" : { "type" : "object", "properties" : { "target" : { "type" : "string" } }, "required" : ["target"] } },
+        { "name" : "split_folder_entities", "description" : "Split folder entities.", "inputSchema" : { "type" : "object", "properties" : { "dir_path" : { "type" : "string" }, "generate_reexport": { "type": "boolean" }, "entity_types": { "type": "array", "items": { "type": "string" } } }, "required" : ["dir_path"] } },
+        { "name" : "discover_multi_entity_files", "description" : "Discover multi-entity files.", "inputSchema" : { "type" : "object", "properties" : { "dir_path" : { "type" : "string" } }, "required" : ["dir_path"] } }
+        ] } }
     )
 }
