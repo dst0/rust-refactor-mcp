@@ -1,42 +1,32 @@
 use serde_json::{json, Value};
 pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, String> {
+    let name = params.get("name").and_then(Value::as_str).ok_or("Missing tool name")?;
     let args = params.get("arguments").ok_or("Missing arguments")?;
-    let file_path = args
-        .get("file_path")
-        .and_then(Value::as_str)
-        .ok_or("file_path is required")?;
-    let entity_name = args
-        .get("entity_name")
-        .and_then(Value::as_str)
-        .ok_or("entity_name is required")?;
-    let target_folder = args
-        .get("target_folder")
-        .and_then(Value::as_str)
-        .ok_or("target_folder is required")?;
-    let entity_type = args.get("entity_type").and_then(Value::as_str);
-    let source = std::fs::read_to_string(file_path)
-        .map_err(|e| format!("Cannot read file: {}", e))?;
-    let result = crate::extract::extract_entity(
-        &source,
-        entity_name,
-        target_folder,
-        entity_type,
-        Some(file_path),
-        None,
-    )?;
-    Ok(
-        json!(
-            { "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text",
-            "text" : format!("Extracted {} → {}\nItems: {}\nUsage files updated: {}",
-            entity_name, result.new_file_path, result.items_extracted.join(", "), if
-            result.usage_files_updated.is_empty() { "none".to_string() } else { result
-            .usage_files_updated.join(", ") }) }], "structuredContent" : {
-            "new_file_path" : result.new_file_path, "test_file_path" : result
-            .test_file_path, "items_extracted" : result.items_extracted,
-            "usage_files_updated" : result.usage_files_updated, "source_updated" : true }
-            } }
-        ),
-    )
+    
+    match name {
+        "extract_entity" => {
+            let file_path = args.get("file_path").and_then(Value::as_str).ok_or("file_path is required")?;
+            let entity_name = args.get("entity_name").and_then(Value::as_str).ok_or("entity_name is required")?;
+            let target_folder = args.get("target_folder").and_then(Value::as_str).ok_or("target_folder is required")?;
+            let entity_type = args.get("entity_type").and_then(Value::as_str);
+            let source = std::fs::read_to_string(file_path).map_err(|e| format!("Cannot read file: {}", e))?;
+            let result = crate::extract::extract_entity(
+                &source,
+                entity_name,
+                target_folder,
+                entity_type,
+                Some(file_path),
+                None,
+            )?;
+            Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : format!("Extracted {} → {}\nItems: {}", entity_name, result.new_file_path, result.items_extracted.join(", ")) }] } }))
+        }
+        "format_code" => {
+            let file_path = args.get("file_path").and_then(Value::as_str).ok_or("file_path is required")?;
+            let result = crate::format_code::format_code(file_path)?;
+            Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : result }] } }))
+        }
+        _ => Err(format!("Unknown tool: {}", name)),
+    }
 }
 #[cfg(test)]
 mod tests {

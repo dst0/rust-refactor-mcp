@@ -12,6 +12,13 @@ pub fn cli_main(args: &[String]) {
     let cmd_or_entity = &args[1];
     let target_folder = &args[2];
 
+    if cmd_or_entity == "FORMAT" {
+        let file_path = &args[2];
+        let result = crate::format_code::format_code(file_path).expect("Format failed");
+        println!("{}", result);
+        return;
+    }
+
     if cmd_or_entity == "SPLIT" {
         let results = split_file(file_path, target_folder, None).expect("Split failed");
         println!("Split {} into:", file_path);

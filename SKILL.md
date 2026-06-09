@@ -20,17 +20,24 @@ Extracts a single entity from a source file into a new file.
 | `target_folder` | yes | Output directory. |
 | `entity_type` | no | Hint: `struct`, `enum`, `fn`, `trait`, `const`, `static`, `type`. |
 
+### 2. `format_code`
+Formats a Rust file using `rustfmt`.
+
+| Parameter | Required | Description |
+| :--- | :--- | :--- |
+| `file_path` | yes | Path to source `.rs` file. |
+
 ---
 
 ## CLI-Only Commands (Bulk Automation)
 
 The CLI executable provides bulk refactoring commands to enforce the "one entity per file" standard across the repository.
 
-### Auto-Split Single File
-Finds all entities in a file and extracts them sequentially based on dependency order.
-```bash
-cargo run -- <file.rs> SPLIT <target_dir>
-```
+### How Splitting Works
+When an entity is extracted, the original source file is surgically modified:
+1. The extracted code is removed, preserving surrounding comments and whitespace.
+2. If the entity was public, a `pub use crate::<new_module_path>::<entity_name>;` re-export is added to the original file to maintain API compatibility.
+3. The new entity file is created and automatically formatted via `rustfmt`.
 
 ### Auto-Split Directory
 Recursively scans a directory (skipping `lib.rs`/`mod.rs`/`main.rs`) and splits all entities into their own files.
