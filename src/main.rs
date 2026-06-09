@@ -1,3 +1,4 @@
+pub mod namevisitor;
 pub mod identcollector;
 pub mod bytespan;
 pub mod extractresult;

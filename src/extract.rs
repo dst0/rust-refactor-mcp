@@ -1,3 +1,4 @@
+use crate::namevisitor::NameVisitor;
 use crate::identcollector::IdentCollector;
 use crate::bytespan::ByteSpan;
 use crate::extractresult::ExtractResult;
@@ -229,7 +230,7 @@ pub fn update_parent_mod(target_folder: &str, entity_name: &str) {
     let new_content = prettyplease::unparse(&new_file);
     let _ = std::fs::write(&module_file, new_content);
 }
-fn find_extracted_indices(parsed: &File, entity_name: &str) -> HashSet<usize> {
+pub fn find_extracted_indices(parsed: &File, entity_name: &str) -> HashSet<usize> {
     let mut indices = HashSet::new();
     for (idx, item) in parsed.items.iter().enumerate() {
         match item {
@@ -266,10 +267,10 @@ fn find_extracted_indices(parsed: &File, entity_name: &str) -> HashSet<usize> {
     }
     indices
 }
-fn is_test_fn(f: &ItemFn) -> bool {
+pub fn is_test_fn(f: &ItemFn) -> bool {
     f.attrs.iter().any(|a| a.path().is_ident("cfg"))
 }
-fn collect_referenced_identifiers(items: &[Item]) -> HashSet<String> {
+pub fn collect_referenced_identifiers(items: &[Item]) -> HashSet<String> {
     let mut visitor = IdentCollector {
         found: HashSet::new(),
     };
@@ -281,7 +282,7 @@ fn collect_referenced_identifiers(items: &[Item]) -> HashSet<String> {
     }
     visitor.found
 }
-fn is_import_used(names: &[String], used_ids: &HashSet<String>) -> bool {
+pub fn is_import_used(names: &[String], used_ids: &HashSet<String>) -> bool {
     for name in names {
         if used_ids.contains(name) {
             return true;
@@ -309,7 +310,7 @@ pub fn cleanup_unused_imports(source: &str) -> String {
         });
     prettyplease::unparse(&parsed)
 }
-fn cleanup_imports_in_ast(parsed: &File, used_ids: &HashSet<String>) -> File {
+pub fn cleanup_imports_in_ast(parsed: &File, used_ids: &HashSet<String>) -> File {
     let mut cleaned = parsed.clone();
     cleaned
         .items
@@ -323,7 +324,7 @@ fn cleanup_imports_in_ast(parsed: &File, used_ids: &HashSet<String>) -> File {
         });
     cleaned
 }
-fn detect_needed_imports_for_extracted(
+pub fn detect_needed_imports_for_extracted(
     parsed: &File,
     extracted: &[Item],
     _entity_name: &str,
@@ -340,7 +341,7 @@ fn detect_needed_imports_for_extracted(
     }
     needed
 }
-fn detect_cross_refs_for_extracted(
+pub fn detect_cross_refs_for_extracted(
     parsed: &File,
     extracted: &[Item],
     entity_name: &str,
@@ -384,7 +385,7 @@ fn detect_cross_refs_for_extracted(
         })
         .collect()
 }
-fn update_usage_files(
+pub fn update_usage_files(
     target_folder: &str,
     entity_name: &str,
 ) -> Result<Vec<String>, String> {
@@ -465,7 +466,7 @@ fn update_usage_files(
     }
     Ok(updated)
 }
-fn format_ty_name(ty: &Type) -> String {
+pub fn format_ty_name(ty: &Type) -> String {
     match ty {
         Type::Path(tp) => {
             tp.path
@@ -482,7 +483,7 @@ fn format_ty_name(ty: &Type) -> String {
         _ => format!("{:?}", ty),
     }
 }
-fn item_type(item: &Item) -> &'static str {
+pub fn item_type(item: &Item) -> &'static str {
     match item {
         Item::Struct(_) => "struct",
         Item::Enum(_) => "enum",
@@ -492,7 +493,7 @@ fn item_type(item: &Item) -> &'static str {
         _ => "item",
     }
 }
-fn span_to_byte(span: &proc_macro2::Span, source: &str) -> ByteSpan {
+pub fn span_to_byte(span: &proc_macro2::Span, source: &str) -> ByteSpan {
     let start = span.start();
     let end = span.end();
     ByteSpan::new(
@@ -500,7 +501,7 @@ fn span_to_byte(span: &proc_macro2::Span, source: &str) -> ByteSpan {
         line_col_to_byte(source, end.line, end.column),
     )
 }
-fn line_col_to_byte(source: &str, line: usize, column: usize) -> usize {
+pub fn line_col_to_byte(source: &str, line: usize, column: usize) -> usize {
     let target_line = line.saturating_sub(1);
     let mut byte_offset = 0;
     let mut current_line: usize = 0;
@@ -519,42 +520,7 @@ fn line_col_to_byte(source: &str, line: usize, column: usize) -> usize {
     }
     byte_offset
 }
-struct NameVisitor {
-    name: String,
-    found: bool,
-}
-impl NameVisitor {
-    fn new(name: &str) -> Self {
-        Self {
-            name: name.to_string(),
-            found: false,
-        }
-    }
-    fn visit_fn(&mut self, item: &ItemFn) -> bool {
-        self.found = false;
-        self.visit_item_fn(item);
-        self.found
-    }
-}
-impl<'a> Visit<'a> for NameVisitor {
-    fn visit_ident(&mut self, id: &'a syn::Ident) {
-        if *id == self.name {
-            self.found = true;
-        }
-        syn::visit::visit_ident(self, id);
-    }
-    fn visit_type(&mut self, ty: &'a Type) {
-        if let Type::Path(tp) = ty {
-            if let Some(seg) = tp.path.segments.last() {
-                if seg.ident == self.name {
-                    self.found = true;
-                }
-            }
-        }
-        syn::visit::visit_type(self, ty);
-    }
-}
-fn has_use_ref(entity_name: &str, tree: &UseTree) -> bool {
+pub fn has_use_ref(entity_name: &str, tree: &UseTree) -> bool {
     match tree {
         UseTree::Path(p) => p.ident == entity_name || has_use_ref(entity_name, &p.tree),
         UseTree::Name(n) => n.ident == entity_name,
@@ -563,7 +529,7 @@ fn has_use_ref(entity_name: &str, tree: &UseTree) -> bool {
         UseTree::Glob(_) => false,
     }
 }
-fn extract_module_path(tree: &UseTree, entity_name: &str) -> String {
+pub fn extract_module_path(tree: &UseTree, entity_name: &str) -> String {
     match tree {
         UseTree::Path(p) => {
             if p.ident == entity_name {
@@ -589,7 +555,7 @@ fn extract_module_path(tree: &UseTree, entity_name: &str) -> String {
         _ => String::new(),
     }
 }
-fn collect_use_names(tree: &UseTree) -> Vec<String> {
+pub fn collect_use_names(tree: &UseTree) -> Vec<String> {
     let mut names = Vec::new();
     match tree {
         UseTree::Path(p) => {
@@ -609,166 +575,4 @@ fn collect_use_names(tree: &UseTree) -> Vec<String> {
         UseTree::Glob(_) => {}
     }
     names
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    fn make_source(code: &str) -> File {
-        syn::parse_file(code).expect("parse")
-    }
-    #[test]
-    fn find_struct() {
-        let source = "struct Foo { x: i32 }";
-        let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "Foo");
-        assert!(! indices.is_empty());
-    }
-    #[test]
-    fn find_enum() {
-        let source = "enum Bar { A, B }";
-        let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "Bar");
-        assert!(! indices.is_empty());
-    }
-    #[test]
-    fn find_fn() {
-        let source = "fn baz() {}";
-        let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "baz");
-        assert!(! indices.is_empty());
-    }
-    #[test]
-    fn find_trait() {
-        let source = "trait Qux {}";
-        let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "Qux");
-        assert!(! indices.is_empty());
-    }
-    #[test]
-    fn find_struct_preferred_over_impl() {
-        let source = "struct Foo;\nimpl Foo {}";
-        let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "Foo");
-        assert!(indices.contains(& 0));
-    }
-    #[test]
-    fn collect_impls_multiple() {
-        let source = "struct Foo {}\nimpl Foo { fn a() {} }\nimpl Default for Foo { fn default() -> Self { Foo } }";
-        let parsed = make_source(source);
-        let indices = find_extracted_indices(&parsed, "Foo");
-        assert_eq!(indices.len(), 3);
-    }
-    #[test]
-    fn item_type_struct() {
-        let source = "struct Foo {}";
-        let parsed = make_source(source);
-        let item = &parsed.items[0];
-        assert_eq!(item_type(item), "struct");
-    }
-    #[test]
-    fn format_ty_simple() {
-        let ty: Type = syn::parse_str("Foo").unwrap();
-        assert_eq!(format_ty_name(& ty), "Foo");
-    }
-    #[test]
-    fn name_visitor_finds_reference() {
-        let source = "fn test() { let x: Foo = Foo; }";
-        let parsed = make_source(source);
-        let mut v = NameVisitor::new("Foo");
-        for item in &parsed.items {
-            if let Item::Fn(f) = item {
-                assert!(v.visit_fn(f));
-            }
-        }
-    }
-    #[test]
-    fn name_visitor_no_reference() {
-        let source = "fn test() { let x: Bar = Bar; }";
-        let parsed = make_source(source);
-        let mut v = NameVisitor::new("Foo");
-        for item in &parsed.items {
-            if let Item::Fn(f) = item {
-                assert!(! v.visit_fn(f));
-            }
-        }
-    }
-    #[test]
-    fn extract_struct_basic() {
-        let source = "struct Foo { x: i32 }\nfn bar() {}";
-        let tmp = std::env::temp_dir().join("rust_refactor_test");
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-        let result = extract_entity(&source, "Foo", tmp.to_str().unwrap(), None, None)
-            .unwrap();
-        assert!(result.items_extracted.contains(& "struct: Foo".to_string()));
-        assert!(result.new_file_path.ends_with("foo.rs"));
-        std::fs::remove_dir_all(&tmp).ok();
-    }
-    #[test]
-    fn extract_with_impl() {
-        let source = "struct Foo { x: i32 }\nimpl Foo { fn new() -> Self { Foo { x: 0 } } }";
-        let tmp = std::env::temp_dir().join("rust_refactor_test2");
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-        let result = extract_entity(&source, "Foo", tmp.to_str().unwrap(), None, None)
-            .unwrap();
-        assert_eq!(result.items_extracted.len(), 2);
-        std::fs::remove_dir_all(&tmp).ok();
-    }
-    #[test]
-    fn extract_enum() {
-        let source = "enum Color { Red, Green, Blue }";
-        let tmp = std::env::temp_dir().join("rust_refactor_test3");
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-        let result = extract_entity(&source, "Color", tmp.to_str().unwrap(), None, None)
-            .unwrap();
-        assert_eq!(result.items_extracted[0], "enum: Color");
-        std::fs::remove_dir_all(&tmp).ok();
-    }
-    #[test]
-    fn extract_not_found() {
-        let source = "struct Foo {}";
-        let tmp = std::env::temp_dir().join("rust_refactor_test4");
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-        let err = extract_entity(&source, "Bar", tmp.to_str().unwrap(), None, None)
-            .unwrap_err();
-        assert!(err.contains("not found"));
-        std::fs::remove_dir_all(&tmp).ok();
-    }
-    #[test]
-    fn extract_invalid_syntax() {
-        let err = extract_entity("not rust !!!", "Foo", ".", None, None).unwrap_err();
-        assert!(err.contains("Parse error"));
-    }
-    #[test]
-    fn collect_referenced_ids() {
-        let source = "use foo::Bar;\nfn test() { let x: Bar = Bar::new(); }";
-        let parsed = make_source(source);
-        let ids = collect_referenced_identifiers(&parsed.items);
-        assert!(ids.contains("Bar"));
-    }
-    #[test]
-    fn cleanup_imports_keeps_used() {
-        let source = "use foo::Bar;\nuse other::Unused;\nfn test() { let x: Bar = Bar::new(); }";
-        let result = cleanup_unused_imports(source);
-        assert!(result.contains("use foo::Bar"));
-        assert!(! result.contains("Unused"));
-    }
-    #[test]
-    fn has_use_ref_positive() {
-        let tree: UseTree = syn::parse_str("simple::Point").unwrap();
-        assert!(has_use_ref("Point", & tree));
-    }
-    #[test]
-    fn has_use_ref_negative() {
-        let tree: UseTree = syn::parse_str("simple::Other").unwrap();
-        assert!(! has_use_ref("Point", & tree));
-    }
-    #[test]
-    fn has_use_ref_grouped() {
-        let tree: UseTree = syn::parse_str("simple::{Point, greet}").unwrap();
-        assert!(has_use_ref("Point", & tree));
-    }
 }
