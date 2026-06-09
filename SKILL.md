@@ -28,6 +28,22 @@ Formats a Rust file using `rustfmt`.
 | :--- | :--- | :--- |
 | `file_path` | yes | Path to source `.rs` file. |
 
+### 3. `rename_entity`
+Renames an entity (struct, enum, fn, etc.) across a file.
+
+| Parameter | Required | Description |
+| :--- | :--- | :--- |
+| `file_path` | yes | Path to source `.rs` file. |
+| `old_name` | yes | Existing name of entity. |
+| `new_name` | yes | New name for entity. |
+
+### 4. `fix_cargo_errors`
+Runs `cargo fix` on a project to resolve auto-fixable errors.
+
+| Parameter | Required | Description |
+| :--- | :--- | :--- |
+| `manifest_path` | yes | Path to `Cargo.toml`. |
+
 ---
 
 ## CLI-Only Commands (Bulk Automation)

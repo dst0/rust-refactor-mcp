@@ -1,5 +1,6 @@
 use crate::extract::extract_entity;
 use crate::split_file::{split_file, split_directory};
+use crate::rename_entity::rename_entity;
 
 pub fn cli_main(args: &[String]) {
     if args.is_empty() {
@@ -18,6 +19,14 @@ pub fn cli_main(args: &[String]) {
     let file_path = first;
     let cmd_or_entity = args.get(1).expect("Missing entity or command");
     
+    if cmd_or_entity == "RENAME" {
+        let old_name = args.get(2).expect("Missing old_name");
+        let new_name = args.get(3).expect("Missing new_name");
+        let changed = rename_entity(file_path, old_name, new_name).expect("Rename failed");
+        println!("Renamed {}: {} -> {} (Changed: {})", file_path, old_name, new_name, changed);
+        return;
+    }
+
     if cmd_or_entity == "SPLIT" {
         let target_folder = args.get(2).expect("Missing target_folder");
         let generate_reexport = !args.contains(&"--no-reexport".to_string());
@@ -32,6 +41,13 @@ pub fn cli_main(args: &[String]) {
     if cmd_or_entity == "FORMAT" {
         let target_file = args.get(2).expect("Missing target_file");
         let result = crate::format_code::format_code(target_file).expect("Format failed");
+        println!("{}", result);
+        return;
+    }
+    
+    if cmd_or_entity == "FIX_CARGO" {
+        let manifest_path = args.get(2).expect("Missing manifest_path");
+        let result = crate::fix_cargo::fix_cargo_errors(manifest_path).expect("Cargo fix failed");
         println!("{}", result);
         return;
     }

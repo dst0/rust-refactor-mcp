@@ -27,6 +27,18 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
             let result = crate::format_code::format_code(file_path)?;
             Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : result }] } }))
         }
+        "rename_entity" => {
+            let file_path = args.get("file_path").and_then(Value::as_str).ok_or("file_path is required")?;
+            let old_name = args.get("old_name").and_then(Value::as_str).ok_or("old_name is required")?;
+            let new_name = args.get("new_name").and_then(Value::as_str).ok_or("new_name is required")?;
+            let changed = crate::rename_entity::rename_entity(file_path, old_name, new_name)?;
+            Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : format!("Renamed: {} (Changed: {})", file_path, changed) }] } }))
+        }
+        "fix_cargo_errors" => {
+            let manifest_path = args.get("manifest_path").and_then(Value::as_str).ok_or("manifest_path is required")?;
+            let result = crate::fix_cargo::fix_cargo_errors(manifest_path)?;
+            Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : result }] } }))
+        }
         _ => Err(format!("Unknown tool: {}", name)),
     }
 }

@@ -24,6 +24,8 @@ pub mod identcollector;
 pub mod spans;
 pub mod extract;
 pub mod format_code;
+pub mod rename_entity;
+pub mod fix_cargo;
 mod mcp;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
