@@ -393,7 +393,8 @@ pub fn update_usage_files(
             for item in &parsed.items {
                 if let Item::Use(iu) = item {
                     if has_use_ref(entity_name, &iu.tree) {
-                         old_mod = Some(extract_module_path(&iu.tree, entity_name));
+                         let full_path = extract_module_path(&iu.tree, entity_name);
+                         old_mod = full_path.split("::").last().map(|s| s.to_string());
                          break;
                     }
                 }
@@ -406,7 +407,7 @@ pub fn update_usage_files(
                     new_mod: new_module.clone(),
                     changed: false,
                 };
-                replacer.visit_file(&mut parsed);
+                replacer.visit_file_mut(&mut parsed);
                 if replacer.changed {
                     changed = true;
                 }
@@ -646,13 +647,13 @@ pub struct QualPathReplacer {
     pub changed: bool,
 }
 impl VisitMut for QualPathReplacer {
-    fn visit_path(&mut self, i: &mut syn::Path) {
+    fn visit_path_mut(&mut self, i: &mut syn::Path) {
         if i.segments.len() == 2 && i.segments[0].ident == self.old_mod && i.segments[1]
             .ident == self.entity_name
         {
             i.segments[0].ident = syn::Ident::new(&self.new_mod, i.segments[0].ident.span());
             self.changed = true;
         }
-        visit_mut::visit_path(self, i);
+        visit_mut::visit_path_mut(self, i);
     }
 }
