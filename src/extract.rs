@@ -154,7 +154,7 @@ pub fn extract_entity(
         let updated_content = prettyplease::unparse(&cleaned);
         fs::write(source_file_path.unwrap_or("source.rs"), &updated_content)
             .map_err(|e| format!("Cannot write updated source: {}", e))?;
-        let usage_updated = update_usage_files(target_folder, entity_name)?;
+        let usage_updated = update_usage_files(target_folder, entity_name, source_stem.as_deref())?;
         update_parent_mod(target_folder, entity_name);
         Ok(ExtractResult {
             new_file_path,
@@ -360,6 +360,7 @@ pub fn detect_cross_refs_for_extracted(
 pub fn update_usage_files(
     target_folder: &str,
     entity_name: &str,
+    old_module_hint: Option<&str>,
 ) -> Result<Vec<String>, String> {
     let source_dir = PathBuf::from(target_folder);
     let mut updated = Vec::new();
@@ -386,16 +387,15 @@ pub fn update_usage_files(
             let mut changed = false;
 
             // Handle qualified calls like mcp::run_server
-            // We need to know the old module name. For now assume target_folder base
-            // or just check all segments[0] that match a module that had this entity.
-            // Simplified: if we find Item::Use(mcp::run_server), we know 'mcp' is the old mod.
-            let mut old_mod = None;
-            for item in &parsed.items {
-                if let Item::Use(iu) = item {
-                    if has_use_ref(entity_name, &iu.tree) {
-                         let full_path = extract_module_path(&iu.tree, entity_name);
-                         old_mod = full_path.split("::").last().map(|s| s.to_string());
-                         break;
+            let mut old_mod = old_module_hint.map(|s| s.to_string());
+            if old_mod.is_none() {
+                for item in &parsed.items {
+                    if let Item::Use(iu) = item {
+                        if has_use_ref(entity_name, &iu.tree) {
+                             let full_path = extract_module_path(&iu.tree, entity_name);
+                             old_mod = full_path.split("::").last().map(|s| s.to_string());
+                             break;
+                        }
                     }
                 }
             }
