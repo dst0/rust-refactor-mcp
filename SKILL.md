@@ -67,16 +67,17 @@ Expands procedural macros for a given target.
 | :--- | :--- | :--- |
 | `target` | yes | Target module or item to expand. |
 
-### 8. `preflight_validator`
-Runs `cargo check` and `cargo test` to verify project integrity.
+### 8. `analyze_dependencies`
+Analyzes module coupling and dependencies within a crate.
 
 | Parameter | Required | Description |
 | :--- | :--- | :--- |
-| `manifest_path` | yes | Path to `Cargo.toml`. |
+| `dir_path` | yes | Path to directory to scan. |
 
-### 9. `discover_multi_entity_files`
-Recursively scans a directory for files containing multiple Rust entities.
+### 9. `preflight_validator`
+Runs `cargo check` and `cargo test` to verify project integrity.
 ...
+
 
 | Parameter | Required | Description |
 | :--- | :--- | :--- |

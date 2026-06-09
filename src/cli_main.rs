@@ -68,6 +68,13 @@ pub fn cli_main(args: &[String]) {
         return;
     }
 
+    if cmd_or_entity == "ANALYZE_DEPS" {
+        let dir_path = args.get(2).expect("Missing dir_path");
+        let result = crate::dependency_graph_analyzer::analyze_dependencies(dir_path).expect("Analysis failed");
+        println!("{}", result);
+        return;
+    }
+
     if cmd_or_entity == "PREFLIGHT" {
         let manifest_path = args.get(2).expect("Missing manifest_path");
         let result = crate::preflight_validator::validate_project(manifest_path).expect("Preflight validation failed");
