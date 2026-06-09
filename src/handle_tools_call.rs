@@ -58,6 +58,11 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
             let result = crate::macro_expander::expand_macros(target)?;
             Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : result }] } }))
         }
+        "preflight_validator" => {
+            let manifest_path = args.get("manifest_path").and_then(Value::as_str).ok_or("manifest_path is required")?;
+            let result = crate::preflight_validator::validate_project(manifest_path)?;
+            Ok(json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : result }] } }))
+        }
         "split_folder_entities" => {
             let dir_path = args.get("dir_path").and_then(Value::as_str).ok_or("dir_path is required")?;
             let generate_reexport = args.get("generate_reexport").and_then(Value::as_bool).unwrap_or(true);

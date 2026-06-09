@@ -68,6 +68,13 @@ pub fn cli_main(args: &[String]) {
         return;
     }
 
+    if cmd_or_entity == "PREFLIGHT" {
+        let manifest_path = args.get(2).expect("Missing manifest_path");
+        let result = crate::preflight_validator::validate_project(manifest_path).expect("Preflight validation failed");
+        println!("{}", result);
+        return;
+    }
+
     if cmd_or_entity == "SSR" {
         let pattern = args.get(2).expect("Missing pattern");
         let replacement = args.get(3).expect("Missing replacement");

@@ -67,8 +67,16 @@ Expands procedural macros for a given target.
 | :--- | :--- | :--- |
 | `target` | yes | Target module or item to expand. |
 
-### 8. `discover_multi_entity_files`
+### 8. `preflight_validator`
+Runs `cargo check` and `cargo test` to verify project integrity.
+
+| Parameter | Required | Description |
+| :--- | :--- | :--- |
+| `manifest_path` | yes | Path to `Cargo.toml`. |
+
+### 9. `discover_multi_entity_files`
 Recursively scans a directory for files containing multiple Rust entities.
+...
 
 | Parameter | Required | Description |
 | :--- | :--- | :--- |
