@@ -215,7 +215,7 @@ mod tests {
         let tools = resp["result"]["tools"].as_array().unwrap();
         // This test might fail now because I added many tools.
         // I need to adjust it to check for existence, not exact length.
-        assert!(tools.len() >= 1);
+        assert!(!tools.is_empty());
         assert!(tools.iter().any(|t| t["name"] == "extract_entity"));
     }
     #[test]

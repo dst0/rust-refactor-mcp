@@ -1,5 +1,4 @@
 use crate::extract::to_snake_case;
-use proc_macro2::Span;
 use std::path::PathBuf;
 use syn::Item;
 /// Backward compat: text-based parent mod update (kept for external callers).
@@ -19,17 +18,27 @@ pub fn update_parent_mod(target_folder: &str, entity_name: &str) {
         return;
     };
     let mod_name = to_snake_case(entity_name);
-    let mod_ident = syn::Ident::new(&mod_name, Span::call_site());
+    if mod_name.is_empty() || mod_name == "_" {
+        return;
+    }
+    let mod_ident = if let Ok(id) = syn::parse_str::<syn::Ident>(&mod_name) {
+        id
+    } else if let Ok(id) = syn::parse_str::<syn::Ident>(&format!("r#{}", mod_name)) {
+        id
+    } else {
+        return;
+    };
     for item in &parsed.items {
         if let Item::Mod(m) = item {
-            if m.ident == mod_name {
+            if m.ident == mod_ident {
                 return;
             }
         }
     }
     let mut new_file = parsed;
-    let mod_item: Item = syn::parse2(quote::quote!(pub mod # mod_ident;)).unwrap();
-    new_file.items.insert(0, mod_item);
+    if let Ok(mod_item) = syn::parse2::<Item>(quote::quote!(pub mod #mod_ident;)) {
+        new_file.items.insert(0, mod_item);
+    }
     let new_content = prettyplease::unparse(&new_file);
     let _ = std::fs::write(&module_file, new_content);
 }

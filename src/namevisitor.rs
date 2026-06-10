@@ -130,7 +130,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let result = extract_entity(
-            &source,
+            source,
             "Foo",
             tmp.to_str().unwrap(),
             None,
@@ -150,7 +150,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let result = extract_entity(
-            &source,
+            source,
             "Foo",
             tmp.to_str().unwrap(),
             None,
@@ -169,7 +169,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let result = extract_entity(
-            &source,
+            source,
             "Color",
             tmp.to_str().unwrap(),
             None,
@@ -188,7 +188,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let err = extract_entity(
-            &source,
+            source,
             "Bar",
             tmp.to_str().unwrap(),
             None,

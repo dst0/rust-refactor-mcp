@@ -152,9 +152,11 @@ pub fn extract_entity(
         if generate_reexport && (used_ids.contains(entity_name) || is_pub) {
             let full_mod_path = get_full_module_path(target_folder, &new_module);
             let vis_prefix = if is_pub { "pub " } else { "" };
-            let use_str = format!("{}use {}::{};", vis_prefix, full_mod_path, entity_name);
-            let source_use: Item = syn::parse_str(&use_str).unwrap();
-            remaining.insert(0, source_use);
+            let escaped_entity = escape_path_segment(entity_name);
+            let use_str = format!("{}use {}::{};", vis_prefix, full_mod_path, escaped_entity);
+            if let Ok(source_use) = syn::parse_str::<Item>(&use_str) {
+                remaining.insert(0, source_use);
+            }
         }
         let remaining_file = File {
             shebang: parsed.shebang.clone(),
@@ -375,10 +377,11 @@ pub fn detect_cross_refs_for_extracted(
         .and_then(|p| {
             PathBuf::from(p)
                 .file_stem()
-                .and_then(|s| s.to_str().map(|s| s.to_string()))
+                .and_then(|s| s.to_str().map(escape_path_segment))
         })
         .unwrap_or_else(|| "super".to_string());
-    let names = needed.join(", ");
+    let escaped_names: Vec<String> = needed.iter().map(|n| escape_path_segment(n)).collect();
+    let names = escaped_names.join(", ");
     let use_str = format!("use crate::{}::{{{}}};", module_name, names);
     let Ok(parsed) = syn::parse_file(&use_str) else {
         return Vec::new();
@@ -483,7 +486,8 @@ pub fn update_usage_files(
                     let prefix = extract_module_path(&iu.tree, entity_name);
                     for name in &names {
                         if name != entity_name {
-                            let use_str = format!("use {}::{};", prefix, name);
+                            let escaped_name = escape_path_segment(name);
+                            let use_str = format!("use {}::{};", prefix, escaped_name);
                             if let Ok(parsed_use) = syn::parse_str::<ItemUse>(&use_str) {
                                 new_items.push(Item::Use(parsed_use));
                             }
@@ -497,7 +501,8 @@ pub fn update_usage_files(
         }
         if changed {
             let full_mod_path = get_full_module_path(target_folder, &new_module);
-            let use_str = format!("use {}::{};", full_mod_path, entity_name);
+            let escaped_entity = escape_path_segment(entity_name);
+            let use_str = format!("use {}::{};", full_mod_path, escaped_entity);
             let new_use: Item = syn::parse_str(&use_str).unwrap();
             new_items.insert(0, new_use);
             let used = collect_referenced_identifiers(&new_items);
@@ -783,6 +788,70 @@ pub fn to_snake_case(s: &str) -> String {
     snake
 }
 
+pub fn is_keyword(s: &str) -> bool {
+    matches!(
+        s,
+        "as" | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "async"
+            | "await"
+            | "dyn"
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "macro"
+            | "override"
+            | "priv"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
+            | "try"
+    )
+}
+
+pub fn escape_path_segment(s: &str) -> String {
+    if is_keyword(s) && s != "crate" && s != "self" && s != "super" && s != "Self" {
+        format!("r#{}", s)
+    } else {
+        s.to_string()
+    }
+}
+
 pub fn get_full_module_path(target_folder: &str, new_module: &str) -> String {
     let mut path = PathBuf::from(target_folder);
     let mut components = Vec::new();
@@ -798,7 +867,11 @@ pub fn get_full_module_path(target_folder: &str, new_module: &str) -> String {
         path = parent.to_path_buf();
     }
     components.reverse();
-    format!("crate::{}", components.join("::"))
+    let escaped_components: Vec<String> = components
+        .into_iter()
+        .map(|c| escape_path_segment(&c))
+        .collect();
+    format!("crate::{}", escaped_components.join("::"))
 }
 
 use crate::extractresult::{ByteSpan, ExtractResult};

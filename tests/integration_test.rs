@@ -1,7 +1,7 @@
 //! Integration tests: copy fixture project → extract entity → verify compilation.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fixture_dir() -> PathBuf {
@@ -23,7 +23,7 @@ fn copy_fixture() -> PathBuf {
     tmp
 }
 
-fn cp_r(src: PathBuf, dst: &PathBuf) {
+fn cp_r(src: PathBuf, dst: &Path) {
     for entry in std::fs::read_dir(&src).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
@@ -54,8 +54,8 @@ fn cargo_check(project_dir: &PathBuf) -> bool {
 
 fn run_extract(file_path: &str, entity_name: &str, target_folder: &str) {
     let bin = Command::new("cargo")
-        .args(&["run", "--"])
-        .args(&[file_path, entity_name, target_folder])
+        .args(["run", "--"])
+        .args([file_path, entity_name, target_folder])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("cargo run failed");
