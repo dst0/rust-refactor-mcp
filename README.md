@@ -7,14 +7,14 @@ One entity per file. Zero re-export index files. Cross-file `use` updates includ
 
 - **Entity Extraction**: Surgically extract a single `struct`, `enum`, `fn`, `trait`, `const`, `static`, or `type` from a file.
 - **Dependency Aware**: Preserves associated `impl` blocks and necessary `use` statements.
-- **Intelligent Routing**: Converts `self::` and `super::` imports automatically into absolute `crate::` paths when shifting module structures.
+- **Intelligent Routing**: Converts `self::` and `super::` imports automatically into absolute `crate::` paths when shifting module structures. Module declarations are correctly placed in the root (`lib.rs`, `main.rs`, or `mod.rs`) to ensure valid crate structure.
 - **Automated Batch Splitting**: Commands to completely split a file or an entire directory recursively into a "one entity per file" architecture.
 - **Fast Global Updates**: Automatically updates usage (`use crate::...`) in sibling and descendant files.
 - **Tests Follow Code**: `#[cfg(test)]` modules that reference an extracted entity are automatically moved to a corresponding `{name}_tests.rs` file.
 - **Analysis & Validation**:
     - **Dead Code Finder**: Semantic analysis to find unused code.
     - **Dependency Graph**: Map module coupling across the crate.
-    - **Preflight Validator**: Integrated `cargo check` and `cargo test` loop.
+    - **Preflight Validator**: Integrated `cargo check` and `cargo test --lib` loop (skips brittle doc-tests in large repos).
 - **Transformation Tools**:
     - **SSR**: Structural Search & Replace.
     - **Rename**: Global entity renaming.

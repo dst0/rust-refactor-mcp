@@ -83,14 +83,14 @@ Identifies potentially dead code (unused functions, structs, etc.) using semanti
 | `dir_path` | yes | Path to directory to scan. |
 
 ### 10. `preflight_validator`
-Runs `cargo check` and `cargo test` to verify project integrity.
+Runs `cargo check` and `cargo test --lib` to verify project integrity. Optimized for large repositories by skipping brittle doc-tests.
 
 | Parameter | Required | Description |
 | :--- | :--- | :--- |
 | `manifest_path` | yes | Path to `Cargo.toml`. |
 
 ### 11. `split_folder_entities`
-Recursively scans a directory and splits all multi-entity files into single-entity files.
+Recursively scans a directory and splits all multi-entity files into single-entity files. Automatically manages module declarations in the project root.
 
 | Parameter | Required | Description |
 | :--- | :--- | :--- |
