@@ -32,18 +32,19 @@ pub fn rename_entity(file_path: &str, old_name: &str, new_name: &str) -> Result<
         fs::write(file_path, new_content).map_err(|e| e.to_string())?;
 
         // Handle file renaming if file matches entity name
-        let path = PathBuf::from(file_path);
-        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+        let mut final_path = PathBuf::from(file_path);
+        if let Some(stem) = final_path.file_stem().and_then(|s| s.to_str()) {
             if stem == crate::extract::to_snake_case(old_name) {
                 let new_filename = format!("{}.rs", crate::extract::to_snake_case(new_name));
-                let new_path = path.with_file_name(new_filename);
-                fs::rename(&path, &new_path).map_err(|e| e.to_string())?;
+                let new_path = final_path.with_file_name(new_filename);
+                fs::rename(&final_path, &new_path).map_err(|e| e.to_string())?;
+                final_path = new_path;
                 // Note: Usage updates are complex; for now, we rely on the user or future MCP tooling
                 // to handle renaming in usage files.
             }
         }
         let _ = std::process::Command::new("rustfmt")
-            .args(["--edition", "2024", file_path])
+            .args(["--edition", "2024", final_path.to_str().unwrap_or(file_path)])
             .status();
         Ok(true)
     } else {

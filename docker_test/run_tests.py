@@ -263,6 +263,30 @@ for repo_url in REPOS:
         elif status == "FAIL":
             failures += 1
             print(f"PREFLIGHT compilation failed on {repo_name}!")
+            print("--- STDOUT/STDERR ---")
+            print(out)
+            print("---------------------")
+            
+            # Debug: List files
+            print("\n--- DIRECTORY STRUCTURE ---")
+            subprocess.run(["ls", "-R", str(repo_dir)])
+            print("--- END OF DIRECTORY STRUCTURE ---\n")
+            
+            # Debug: Print offending files
+            error_files = set(re.findall(r"--> (src/.*?\.rs):\d+:\d+", out))
+            # Always try to print these key files
+            error_files.add("src/trace.rs")
+            error_files.add("src/service/http.rs")
+            for ef in error_files:
+                fpath = repo_dir / ef
+                if fpath.exists():
+                    print(f"\n--- CONTENT OF {ef} ---")
+                    try:
+                        print(fpath.read_text())
+                    except Exception as e:
+                        print(f"Error reading file: {e}")
+                    print(f"--- END OF {ef} ---\n")
+            
             print("Stopping tests due to failure.")
             sys.exit(1)
         else:

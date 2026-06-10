@@ -229,15 +229,14 @@ fn extract_greet_from_simple() {
     // simple.rs updated — greet re-exported
     let simple_content = fs::read_to_string(&file_path).unwrap();
     assert!(
-        simple_content.contains("pub mod greet_impl"),
-        "simple.rs should contain 'pub mod greet_impl', but got:\n{}",
-        simple_content
-    );
-    assert!(
         simple_content.contains("pub use crate::greet_impl::greet"),
         "simple.rs should contain 'pub use crate::greet_impl::greet', but got:\n{}",
         simple_content
     );
+
+    // lib.rs updated
+    let lib_content = fs::read_to_string(src_dir.join("lib.rs")).unwrap();
+    assert!(lib_content.contains("pub mod greet_impl"));
 
     // Project compiles after extraction
     assert!(

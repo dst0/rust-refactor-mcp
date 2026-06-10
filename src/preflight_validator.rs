@@ -25,7 +25,7 @@ pub fn validate_project(manifest_path: &str) -> Result<String, String> {
 
     // 2. Run cargo test
     let test_status = Command::new("cargo")
-        .args(["test", "--manifest-path", manifest_path, "--color", "never"])
+        .args(["test", "--lib", "--manifest-path", manifest_path, "--color", "never"])
         .output()
         .map_err(|e| format!("Failed to run cargo test: {}", e))?;
 

@@ -153,7 +153,7 @@ pub fn extract_entity(
             .map(|s| s.to_string_lossy().to_string())
     });
     let same_file = source_stem.as_deref() == Some(&new_module);
-    let file_path = PathBuf::from(source_file_path.unwrap_or(""));
+    let _file_path = PathBuf::from(source_file_path.unwrap_or(""));
     let target_dir = Path::new(target_folder);
     let mod_dir = target_dir.join(&new_module);
     let new_path = if mod_dir.is_dir() {
@@ -224,29 +224,28 @@ pub fn extract_entity(
         }
 
         if !already_exists {
-            // Collect names already defined in new_file (e.g. from a prior extraction pass)
-            let already_defined: HashSet<String> = new_file
+            // Track all names imported into this file to prevent E0252
+            let mut imported_names: HashSet<String> = new_file
                 .items
                 .iter()
                 .filter_map(|item| get_item_name(item))
                 .collect();
 
-            for imp in &needed_imports {
-                // Skip imports whose name conflicts with existing definitions
-                let imp_names = collect_use_names(&imp.tree);
-                if imp_names.iter().any(|n| already_defined.contains(n)) {
-                    continue;
-                }
-                let imp_str = quote::quote!(#imp).to_string();
-                let is_dup = new_file.items.iter().any(|existing| {
-                    if let Item::Use(existing_imp) = existing {
-                        quote::quote!(#existing_imp).to_string() == imp_str
-                    } else {
-                        false
+            for imp in needed_imports {
+                let names = collect_use_names(&imp.tree);
+                // Check if any of these names would conflict
+                let mut conflict = false;
+                for name in &names {
+                    if imported_names.contains(name) {
+                        conflict = true;
+                        break;
                     }
-                });
-                if !is_dup {
-                    new_file.items.push(Item::Use(imp.clone()));
+                }
+                if !conflict {
+                    for name in names {
+                        imported_names.insert(name);
+                    }
+                    new_file.items.push(Item::Use(imp));
                 }
             }
             for item in &extracted {
@@ -304,17 +303,25 @@ pub fn extract_entity(
 
             let cross_refs =
                 detect_cross_refs_for_extracted(&parsed, &extracted, entity_name, source_file_path);
-            for imp in cross_refs {
-                let imp_str = quote::quote!(#imp).to_string();
-                let is_dup = new_file.items.iter().any(|existing| {
-                    if let Item::Use(existing_imp) = existing {
-                        quote::quote!(#existing_imp).to_string() == imp_str
-                    } else {
-                        false
+            for item in cross_refs {
+                if let Item::Use(imp) = &item {
+                    let names = collect_use_names(&imp.tree);
+                    let mut conflict = false;
+                    for name in &names {
+                        if imported_names.contains(name) {
+                            conflict = true;
+                            break;
+                        }
                     }
-                });
-                if !is_dup {
-                    new_file.items.push(Item::Use(imp));
+                    if !conflict {
+                        for name in names {
+                            imported_names.insert(name);
+                        }
+                        new_file.items.push(item);
+                    }
+                } else {
+                    // It's a macro or something else we decided to copy
+                    new_file.items.push(item);
                 }
             }
         }
@@ -383,25 +390,24 @@ pub fn extract_entity(
             let relative_mod_path = get_crate_relative_mod_path(&new_path);
             let full_mod_path = format!("crate::{}", relative_mod_path);
             let vis_prefix = if is_pub { "pub " } else { "pub(crate) " };
-            let mod_ident = syn::Ident::new(&new_module, proc_macro2::Span::call_site());
-            let mod_path = format!("{}.rs", new_module);
-            let vis: syn::Visibility = if is_pub {
-                syn::parse_quote!(pub)
-            } else {
-                syn::parse_quote!(pub(crate))
-            };
-            let mod_use: Item = syn::parse_quote!(#vis mod #mod_ident;);
-            remaining.insert(0, mod_use);
-
             let escaped_entity = escape_path_segment(entity_name);
             let use_str = format!("{}use {}::{};", vis_prefix, full_mod_path, escaped_entity);
             if let Ok(mut source_use) = syn::parse_str::<Item>(&use_str) {
                 if let Item::Use(ref mut iu) = source_use {
-                    if extracted.len() == 1 {
-                        iu.attrs = get_item_attrs(&extracted[0]).unwrap_or_default();
+                    let mut merged_attrs = Vec::new();
+                    for item in &extracted {
+                        if let Some(attrs) = get_item_attrs(item) {
+                            for a in attrs {
+                                let a_str = quote::quote!(#a).to_string();
+                                if !merged_attrs.iter().any(|existing: &syn::Attribute| quote::quote!(#existing).to_string() == a_str) {
+                                    merged_attrs.push(a);
+                                }
+                            }
+                        }
                     }
+                    iu.attrs = merged_attrs;
                 }
-                remaining.insert(1, source_use);
+                remaining.insert(0, source_use);
             }
         }
         let remaining_file = File {
@@ -420,14 +426,20 @@ pub fn extract_entity(
             .status();
         // relative_mod_path calculated above
 
+        let entity_attrs = if !extracted.is_empty() {
+            get_item_attrs(&extracted[0])
+        } else {
+            None
+        };
+
         let usage_updated = update_usage_files(
             target_folder,
             entity_name,
-            &new_module,
             &relative_mod_path,
             source_stem.as_deref(),
             source_file_path,
             cached_files,
+            entity_attrs.as_deref(),
         )?;
         update_parent_mod(&target_folder, &new_module);
         Ok(ExtractResult {
@@ -563,23 +575,62 @@ pub fn cleanup_imports_in_ast(parsed: &File, used_ids: &HashSet<String>) -> File
 
 pub fn get_crate_relative_mod_path(path: &std::path::Path) -> String {
     let mut parts = Vec::new();
-    for component in path.components() {
-        if let std::path::Component::Normal(c) = component {
+    let components: Vec<_> = path.components().collect();
+    
+    let mut start_idx = 0;
+    for (i, comp) in components.iter().enumerate().rev() {
+        if let std::path::Component::Normal(c) = comp {
+            let s = c.to_string_lossy();
+            if s == "src" || s == "tests" || s == "benches" || s == "examples" {
+                start_idx = i + 1;
+                break;
+            }
+        }
+    }
+    
+    for comp in &components[start_idx..] {
+        if let std::path::Component::Normal(c) = comp {
             let s = c.to_string_lossy().to_string();
-            if s == "src" || s == "lib.rs" || s == "main.rs" {
+            if s == "lib.rs" || s == "main.rs" {
                 continue;
             }
             if s.ends_with(".rs") {
                 let stem = s.trim_end_matches(".rs");
                 if stem != "mod" {
-                    parts.push(stem.to_string());
+                    parts.push(escape_path_segment(stem));
                 }
             } else {
-                parts.push(s);
+                parts.push(escape_path_segment(&s));
             }
         }
     }
     parts.join("::")
+}
+
+fn remove_entity_from_use_tree(tree: &mut syn::UseTree, entity: &str) -> bool {
+    match tree {
+        syn::UseTree::Name(n) => n.ident != entity,
+        syn::UseTree::Rename(r) => r.ident != entity && r.rename != entity,
+        syn::UseTree::Path(p) => {
+            if remove_entity_from_use_tree(&mut p.tree, entity) {
+                true
+            } else {
+                false
+            }
+        }
+        syn::UseTree::Group(g) => {
+            let mut new_items = syn::punctuated::Punctuated::new();
+            for item in &g.items {
+                let mut pruned_item = item.clone();
+                if remove_entity_from_use_tree(&mut pruned_item, entity) {
+                    new_items.push(pruned_item);
+                }
+            }
+            g.items = new_items;
+            !g.items.is_empty()
+        }
+        syn::UseTree::Glob(_) => true,
+    }
 }
 
 pub fn detect_needed_imports_for_extracted(
@@ -602,7 +653,11 @@ pub fn detect_needed_imports_for_extracted(
                 if names.iter().any(|n| extracted_names.contains(n)) {
                     return None;
                 }
-                Some(iu.clone())
+                
+                let mut new_iu = iu.clone();
+                // Ensure it's a private import in the new file so we don't accidentally re-export
+                new_iu.vis = syn::Visibility::Inherited;
+                Some(new_iu)
             } else {
                 None
             }
@@ -641,65 +696,94 @@ pub fn transform_self_to_crate(root_tree: &mut UseTree) {
         }
     }
 }
+
 pub fn detect_cross_refs_for_extracted(
     parsed: &File,
     extracted: &[Item],
     entity_name: &str,
-    source_file_path: Option<&str>,
-) -> Vec<ItemUse> {
-    let defined: Vec<String> = parsed
-        .items
-        .iter()
-        .filter_map(|item| {
-            if let Some(name) = get_item_name(item) {
-                if name != entity_name {
-                    return Some(name);
+    _source_file_path: Option<&str>,
+) -> Vec<Item> {
+    let mut defined_with_attrs: std::collections::HashMap<String, (Item, Vec<syn::Attribute>)> =
+        std::collections::HashMap::new();
+
+    for item in &parsed.items {
+        if matches!(item, Item::Use(_)) {
+            continue; // Ignore imports entirely. They are copied by detect_needed_imports.
+        }
+        if let Some(name) = get_item_name(item) {
+            if name != entity_name {
+                let attrs = get_item_attrs(item).unwrap_or_default();
+                defined_with_attrs
+                    .entry(name)
+                    .and_modify(|(_, existing_attrs)| {
+                        for a in attrs.clone() {
+                            let a_str = quote::quote!(#a).to_string();
+                            if !existing_attrs.iter().any(|e| quote::quote!(#e).to_string() == a_str) {
+                                existing_attrs.push(a);
+                            }
+                        }
+                    })
+                    .or_insert((item.clone(), attrs));
+            }
+        }
+    }
+
+    let used = collect_referenced_identifiers(extracted);
+    let mut cross_refs = Vec::new();
+
+    for (name, (item, attrs)) in defined_with_attrs {
+        // ONLY add if it is used by the extracted code
+        if used.contains(&name) {
+            match item {
+                Item::Macro(m) => {
+                    // COPY macro definitions instead of importing them
+                    let mut new_mac = m.clone();
+                    new_mac.attrs = attrs;
+                    cross_refs.push(Item::Macro(new_mac));
+                }
+                _ => {
+                    let escaped_name = escape_path_segment(&name);
+                    let use_str = format!("use super::{};", escaped_name);
+                    if let Ok(mut iu_parsed) = syn::parse_str::<ItemUse>(&use_str) {
+                        iu_parsed.attrs = attrs;
+                        cross_refs.push(Item::Use(iu_parsed));
+                    }
                 }
             }
-            None
-        })
-        .collect();
-    let used = collect_referenced_identifiers(extracted);
-    let needed: Vec<String> = defined
-        .into_iter()
-        .filter(|n| used.contains(n.as_str()))
-        .collect();
-    if needed.is_empty() {
-        return Vec::new();
+        }
     }
-    let module_path = "super".to_string();
-    let escaped_names: Vec<String> = needed.iter().map(|n| escape_path_segment(n)).collect();
-    let names = escaped_names.join(", ");
-    let use_str = format!("use {}::{{{}}};", module_path, names);
-    let Ok(parsed) = syn::parse_file(&use_str) else {
-        return Vec::new();
-    };
-    parsed
-        .items
-        .into_iter()
-        .filter_map(|item| match item {
-            Item::Use(iu) => Some(iu),
-            _ => None,
-        })
-        .collect()
+
+    cross_refs
 }
 pub fn update_usage_files(
     target_folder: &str,
     entity_name: &str,
-    new_module_name: &str,
     relative_mod_path: &str,
     old_module_hint: Option<&str>,
-    exclude_path: Option<&str>,
+    source_file_path: Option<&str>,
     cached_files: Option<&Vec<PathBuf>>,
+    entity_attrs: Option<&[syn::Attribute]>,
 ) -> Result<Vec<String>, String> {
     let mut updated = Vec::new();
-    let exclude_canonical = exclude_path.and_then(|p| fs::canonicalize(p).ok());
+    let exclude_canonical = source_file_path.and_then(|p| fs::canonicalize(p).ok());
     let mut files_to_process = Vec::new();
     if let Some(cached) = cached_files {
         files_to_process = cached.clone();
     } else {
         collect_rs_files(PathBuf::from(target_folder), &mut files_to_process);
     }
+
+    // Calculate the full module path of the source file for strict comparison
+    let source_mod_path = if let Some(sfp) = source_file_path {
+        let p = get_crate_relative_mod_path(Path::new(sfp));
+        if p.is_empty() {
+            "crate".to_string()
+        } else {
+            format!("crate::{}", p)
+        }
+    } else {
+        "crate".to_string()
+    };
 
     let total_files = files_to_process.len();
     for (i, path) in files_to_process.into_iter().enumerate() {
@@ -737,41 +821,75 @@ pub fn update_usage_files(
             Ok(p) => p,
             Err(_) => continue,
         };
-        let new_module = new_module_name.to_string();
         let mut changed = false;
 
-        // Determine the old module name for matching import paths
-        let mut old_mod = old_module_hint.map(|s| s.to_string());
-        if old_mod.is_none() {
-            for item in &parsed.items {
-                if let Item::Use(iu) = item {
+        let mut new_items: Vec<Item> = Vec::new();
+        for item in parsed.items {
+            match item {
+                Item::Use(mut iu) => {
                     if has_use_ref(entity_name, &iu.tree) {
-                        let full_path = extract_module_path(&iu.tree, entity_name);
-                        old_mod = full_path.split("::").last().map(|s| s.to_string());
-                        break;
+                        // Double check path matches
+                        let this_path = extract_module_path(&iu.tree, entity_name);
+                        let full_this_path = if this_path == "crate" || this_path.is_empty() {
+                            "crate".to_string()
+                        } else if this_path.starts_with("crate::") {
+                            this_path.clone()
+                        } else if this_path == "self" || this_path == "super" {
+                            if let Some(hint) = old_module_hint {
+                                if this_path.contains(hint) {
+                                    format!("crate::{}", hint)
+                                } else {
+                                    "crate::UNKNOWN".to_string()
+                                }
+                            } else {
+                                "crate::UNKNOWN".to_string()
+                            }
+                        } else {
+                            format!("crate::{}", this_path)
+                        };
+
+                        if full_this_path != source_mod_path {
+                            new_items.push(Item::Use(iu));
+                            continue;
+                        }
+
+                        changed = true;
+                        if remove_entity_from_use_tree(&mut iu.tree, entity_name) {
+                            new_items.push(Item::Use(iu));
+                        }
+                    } else {
+                        new_items.push(Item::Use(iu));
                     }
                 }
-            }
-        }
-        // Note: We deliberately do NOT run QualPathReplacer here.
-        // Since re-exports are always generated, old qualified paths (e.g. ping::channel())
-        // still resolve correctly via the re-export and should not be rewritten.
-
-        let mut new_items: Vec<Item> = Vec::new();
-        let mut extracted_attrs: Vec<syn::Attribute> = Vec::new();
-        for item in parsed.items {
-            match &item {
                 _ => {
                     new_items.push(item);
                 }
             }
         }
         if changed {
-            // NOTE: We deliberately skip the import cleanup here.
-            // The cleanup_imports_in_ast call in extract_entity handles the extracted file.
-            // Aggressive cleanup here can remove imports that are still needed by code
-            // that was already extracted to other files (e.g., `use crate::client::dispatch`
-            // removed after extracting SendRequest, then TrySendError extraction cleans it up).
+            let escaped_entity = escape_path_segment(entity_name);
+            let use_str = if relative_mod_path.is_empty() {
+                format!("use crate::{};", escaped_entity)
+            } else {
+                format!("use crate::{}::{};", relative_mod_path, escaped_entity)
+            };
+            if let Ok(mut new_use) = syn::parse_str::<Item>(&use_str) {
+                if let Item::Use(ref mut iu) = new_use {
+                    if let Some(attrs) = entity_attrs {
+                        iu.attrs = attrs.to_vec();
+                    }
+                }
+                // Find the first use statement or insert at the top
+                let mut insert_idx = 0;
+                for (idx, item) in new_items.iter().enumerate() {
+                    if matches!(item, Item::Use(_)) {
+                        insert_idx = idx;
+                        break;
+                    }
+                }
+                new_items.insert(insert_idx, new_use);
+            }
+
             let final_file = syn::File {
                 shebang: parsed.shebang.clone(),
                 attrs: parsed.attrs.clone(),
@@ -784,7 +902,10 @@ pub fn update_usage_files(
         }
     }
     if total_files > 10 {
-        println!("\r    Usage scan: done ({} files searched)                                                    ", total_files);
+        println!(
+            "\r    Usage scan: done ({} files searched)                                                    ",
+            total_files
+        );
     }
     Ok(updated)
 }
@@ -959,11 +1080,34 @@ pub fn make_item_pub(item: &mut Item) {
             // Enum variants and their fields inherit the enum's visibility
             // We cannot put `pub` on them!
         }
-        Item::Trait(t) => promote_vis(&mut t.vis),
+        Item::Trait(t) => {
+            promote_vis(&mut t.vis);
+            for item in &mut t.items {
+                match item {
+                    syn::TraitItem::Fn(_f) => {
+                        // Traits have no visibility on their items by default
+                    }
+                    syn::TraitItem::Type(_t) => {
+                    }
+                    syn::TraitItem::Const(_c) => {
+                    }
+                    _ => {}
+                }
+            }
+        }
         Item::Type(t) => promote_vis(&mut t.vis),
         Item::Const(c) => promote_vis(&mut c.vis),
         Item::Static(s) => promote_vis(&mut s.vis),
         Item::Mod(m) => promote_vis(&mut m.vis),
+        Item::Impl(i) => {
+            if i.trait_.is_none() {
+                for item in &mut i.items {
+                    if let syn::ImplItem::Fn(f) = item {
+                        promote_vis(&mut f.vis);
+                    }
+                }
+            }
+        }
         _ => {}
     }
 }
@@ -1015,6 +1159,22 @@ pub fn get_item_name(item: &Item) -> Option<String> {
         Item::Static(s) => Some(s.ident.to_string()),
         Item::Type(t) => Some(t.ident.to_string()),
         Item::Mod(m) => Some(m.ident.to_string()),
+        Item::Use(u) => {
+            let names = collect_use_names(&u.tree);
+            if names.len() == 1 {
+                Some(names[0].clone())
+            } else {
+                None
+            }
+        }
+        Item::Impl(i) => {
+            if let syn::Type::Path(tp) = &*i.self_ty {
+                if let Some(segment) = tp.path.segments.last() {
+                    return Some(segment.ident.to_string());
+                }
+            }
+            None
+        }
         Item::Macro(m) => {
             if let Some(id) = m.ident.as_ref() {
                 return Some(id.to_string());
@@ -1058,6 +1218,7 @@ pub fn get_item_attrs(item: &Item) -> Option<Vec<syn::Attribute>> {
         Item::Mod(m) => Some(m.attrs.clone()),
         Item::Macro(m) => Some(m.attrs.clone()),
         Item::Use(u) => Some(u.attrs.clone()),
+        Item::Impl(i) => Some(i.attrs.clone()),
         _ => None,
     };
     attrs.map(|v| v.into_iter().filter(|a| a.path().is_ident("cfg")).collect())
