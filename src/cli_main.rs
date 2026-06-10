@@ -3,8 +3,32 @@ use crate::rename_entity::rename_entity;
 use crate::split_file::{split_file, split_folder_entities};
 
 pub fn cli_main(args: &[String]) {
-    if args.is_empty() {
-        panic!("Missing command/file_path");
+    if args.is_empty() || args.contains(&"--help".to_string()) || args.contains(&"-h".to_string()) {
+        println!("Rust Refactor MCP CLI");
+        println!("");
+        println!("Usage:");
+        println!("  Single Entity Extraction:");
+        println!("    cargo run -- <file.rs> <EntityName> <target_dir> [--types=struct,fn] [--no-reexport]");
+        println!("");
+        println!("  Batch Tools:");
+        println!("    cargo run -- <file.rs> SPLIT <target_dir> [--no-reexport]");
+        println!("    cargo run -- SPLIT_DIR <dir_path> [--no-reexport]");
+        println!("    cargo run -- . ANALYZE_DEPS <dir_path>");
+        println!("    cargo run -- . FIND_DEAD_CODE <dir_path>");
+        println!("    cargo run -- . PREFLIGHT <Cargo.toml_path>");
+        println!("");
+        println!("  Transformation Tools:");
+        println!("    cargo run -- <file.rs> RENAME <old_name> <new_name>");
+        println!("    cargo run -- <file.rs> FORMAT");
+        println!("    cargo run -- <file.rs> OPTIMIZE_IMPORTS");
+        println!("    cargo run -- <file.rs> SSR <pattern> <replacement>");
+        println!("    cargo run -- . EXPAND <target>");
+        println!("");
+        println!("  Options:");
+        println!("    --no-reexport    Disable 'pub use' re-exports in the original file.");
+        println!("    --types=<types>  Comma-separated list of entity types to include.");
+        println!("    --help, -h       Show this help message.");
+        return;
     }
 
     let first = &args[0];

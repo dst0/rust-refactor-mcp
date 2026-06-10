@@ -7,6 +7,7 @@ The `rust-refactor-mcp` server provides high-precision Rust codebase refactoring
 - **Single Entity Extraction**: Surgically move one entity to its own file.
 - **Automated Dependency Management**: Automatically adjusts `use` statements, preserves `impl` blocks, transforms `self::`/`super::` imports to absolute `crate::` paths, and migrates `#[cfg(test)]` modules.
 - **Batch Codebase Refactoring**: Commands to split large, multi-entity files or entire directories into "one entity per file" standard.
+- **Analysis & Verification**: Semantic dead code detection, module dependency mapping, and preflight integrity checks (`cargo check`/`test`).
 
 ## Available Tools (accessible via MCP)
 
@@ -18,7 +19,7 @@ Extracts a single entity from a source file into a new file.
 | `file_path` | yes | Path to source `.rs` file. |
 | `entity_name` | yes | Name of entity (e.g., `MyStruct`). |
 | `target_folder` | yes | Output directory. |
-| `entity_type` | no | Hint: `struct`, `enum`, `fn`, `trait`, `const`, `static`, `type`. |
+| `entity_types` | no | Filter by type (e.g., `["struct", "fn"]`). |
 | `generate_reexport` | no | Default: `true`. Set `false` to disable `pub use` re-exports. |
 
 ### 2. `format_code`
@@ -57,11 +58,11 @@ Performs structural search and replace on Rust source code.
 | Parameter | Required | Description |
 | :--- | :--- | :--- |
 | `file_path` | yes | Path to source `.rs` file. |
-| `pattern` | yes | AST pattern to match. |
-| `replacement` | yes | AST replacement pattern. |
+| `pattern` | yes | syn-style pattern to match. |
+| `replacement` | yes | Replacement code. |
 
 ### 7. `expand_macros`
-Expands procedural macros for a given target.
+Expands procedural macros for a given target using `cargo expand`.
 
 | Parameter | Required | Description |
 | :--- | :--- | :--- |
@@ -74,54 +75,53 @@ Analyzes module coupling and dependencies within a crate.
 | :--- | :--- | :--- |
 | `dir_path` | yes | Path to directory to scan. |
 
-### 9. `preflight_validator`
-Runs `cargo check` and `cargo test` to verify project integrity.
-...
-
+### 9. `find_dead_code`
+Identifies potentially dead code (unused functions, structs, etc.) using semantic analysis.
 
 | Parameter | Required | Description |
 | :--- | :--- | :--- |
 | `dir_path` | yes | Path to directory to scan. |
 
-### 9. `split_folder_entities`
+### 10. `preflight_validator`
+Runs `cargo check` and `cargo test` to verify project integrity.
+
+| Parameter | Required | Description |
+| :--- | :--- | :--- |
+| `manifest_path` | yes | Path to `Cargo.toml`. |
+
+### 11. `split_folder_entities`
 Recursively scans a directory and splits all multi-entity files into single-entity files.
 
 | Parameter | Required | Description |
 | :--- | :--- | :--- |
 | `dir_path` | yes | Path to directory to scan. |
-| `generate_reexport` | no | Default: `true`. Set `false` to disable `pub use` re-exports. |
+| `generate_reexport` | no | Default: `true`. |
 
 ---
 
 ## CLI-Only Commands (Bulk Automation)
 
-The CLI executable provides bulk refactoring commands to enforce the "one entity per file" standard across the repository.
+The CLI executable provides bulk refactoring commands to enforce the "one entity per file" standard.
 
-### How Splitting Works
-When an entity is extracted, the original source file is surgically modified:
-1. The extracted code is removed, preserving surrounding comments and whitespace.
-2. If the entity was public, a `pub use crate::<new_module_path>::<entity_name>;` re-export is added to the original file to maintain API compatibility (can be disabled with `--no-reexport`).
-3. The new entity file is created and automatically formatted via `rustfmt`.
-
-### Auto-Split Single File
-Finds all entities in a file and extracts them sequentially based on dependency order.
+### Usage
 ```bash
-cargo run -- <file.rs> SPLIT <target_dir> [--no-reexport]
+cargo run -- <target> <COMMAND> [args...] [--options]
 ```
 
-### Auto-Split Directory
-Recursively scans a directory (skipping `lib.rs`/`mod.rs`/`main.rs`) and splits all entities into their own files.
-```bash
-cargo run -- SPLIT_DIR <dir_path> [--no-reexport]
-```
+- **Split File**: `cargo run -- <file.rs> SPLIT <target_dir>`
+- **Split Directory**: `cargo run -- SPLIT_DIR <dir_path>`
+- **Analyze Deps**: `cargo run -- . ANALYZE_DEPS <dir_path>`
+- **Find Dead Code**: `cargo run -- . FIND_DEAD_CODE <dir_path>`
+- **Preflight**: `cargo run -- . PREFLIGHT <Cargo.toml>`
+- **Rename**: `cargo run -- <file.rs> RENAME <old> <new>`
+- **SSR**: `cargo run -- <file.rs> SSR <pattern> <replacement>`
+- **Expand**: `cargo run -- . EXPAND <target>`
 
 ---
 
 ## Refactoring Guidelines for PI Agent
 
 1. **Topological Order**: When performing batch refactors, prioritize entities with fewer dependencies first. The `SPLIT` commands handle this automatically.
-2. **Preserve Public API**: By default, the tool adds `pub use` re-exports if an entity was previously public, ensuring external code does not break. Use `--no-reexport` to force a clean break in dependency paths if you are performing a major refactor and are prepared to manually update all call sites.
-3. **File Attributes**: The tool preserves file-level attributes (`#![...]`) and shebangs during extraction.
-4. **Iterative Refactor**: For large refactors, prefer `SPLIT_DIR` on a directory-by-directory basis to manage throughput and allow for incremental verification.
-5. **No Bundling**: Always aim for the "one entity per file" convention enforced by these tools.
-6. **Compilability**: These tools are AST-based and designed to keep the project compilable before and after each refactoring step.
+2. **Preserve Public API**: By default, the tool adds `pub use` re-exports if an entity was previously public.
+3. **Compilability**: These tools are AST-based and designed to keep the project compilable before and after each refactoring step.
+4. **Verification Loop**: Always run `PREFLIGHT` after a major refactor to ensure no regressions were introduced.

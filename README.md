@@ -7,54 +7,101 @@ One entity per file. Zero re-export index files. Cross-file `use` updates includ
 
 - **Entity Extraction**: Surgically extract a single `struct`, `enum`, `fn`, `trait`, `const`, `static`, or `type` from a file.
 - **Dependency Aware**: Preserves associated `impl` blocks and necessary `use` statements.
-- **Intelligent Routing**: Converts `self::` and `super::` imports automatically into absolute `crate::` paths when shifting module structures. Iterative AST parsing prevents stack overflows.
+- **Intelligent Routing**: Converts `self::` and `super::` imports automatically into absolute `crate::` paths when shifting module structures.
 - **Automated Batch Splitting**: Commands to completely split a file or an entire directory recursively into a "one entity per file" architecture.
-- **Fast Global Updates**: Automatically updates usage (`use crate::...`) in sibling and descendant files using pre-filtered fast-string matching to scale to large codebases instantly.
+- **Fast Global Updates**: Automatically updates usage (`use crate::...`) in sibling and descendant files.
 - **Tests Follow Code**: `#[cfg(test)]` modules that reference an extracted entity are automatically moved to a corresponding `{name}_tests.rs` file.
+- **Analysis & Validation**:
+    - **Dead Code Finder**: Semantic analysis to find unused code.
+    - **Dependency Graph**: Map module coupling across the crate.
+    - **Preflight Validator**: Integrated `cargo check` and `cargo test` loop.
+- **Transformation Tools**:
+    - **SSR**: Structural Search & Replace.
+    - **Rename**: Global entity renaming.
+    - **Macro Expansion**: `cargo expand` integration.
+    - **Import Optimization**: Sorting and cleaning imports.
 
 ## Tools (MCP)
 
 ### `extract_entity`
+Extracts a single entity from a source file.
+- `file_path`: Path to source file.
+- `entity_name`: Name of entity to extract.
+- `target_folder`: Output directory.
+- `entity_types`: (Optional) Filter by type (e.g., `["struct", "fn"]`).
+- `generate_reexport`: (Optional) Default `true`.
 
-| Parameter       | Required | Description                             |
-|-----------------|----------|-----------------------------------------|
-| `file_path`     | yes      | Path to source `.rs` file               |
-| `entity_name`   | yes      | Entity to extract                       |
-| `target_folder` | yes      | Output directory for new module         |
-| `entity_type`   | no       | Hint: `struct`, `enum`, `fn`, `trait`  |
+### `format_code`
+Formats a Rust file using `rustfmt`.
+- `file_path`: Path to file.
+
+### `rename_entity`
+Renames an entity across a file.
+- `file_path`: Path to file.
+- `old_name`: Existing name.
+- `new_name`: New name.
+
+### `fix_cargo_errors`
+Runs `cargo fix` on a project.
+- `manifest_path`: Path to `Cargo.toml`.
+
+### `optimize_imports`
+Optimizes and sorts imports.
+- `file_path`: Path to file.
+
+### `ssr`
+Structural search and replace.
+- `file_path`: Path to file.
+- `pattern`: syn-style pattern.
+- `replacement`: Replacement code.
+
+### `expand_macros`
+Expands macros for a target.
+- `target`: Target item/module.
+
+### `analyze_dependencies`
+Map module dependencies.
+- `dir_path`: Directory to scan.
+
+### `find_dead_code`
+Identify potentially unused code.
+- `dir_path`: Directory to scan.
+
+### `preflight_validator`
+Verify project integrity.
+- `manifest_path`: Path to `Cargo.toml`.
+
+### `split_folder_entities`
+Recursively split all multi-entity files in a folder.
+- `dir_path`: Directory to scan.
+
+### `discover_multi_entity_files`
+List files that contain more than one entity.
+- `dir_path`: Directory to scan.
 
 ## CLI Usage
 
-The executable can be used directly as a CLI for immediate codebase refactoring.
+The executable can be used directly as a CLI.
 
-### Single Entity Extraction
+### Extraction
 ```bash
-cargo run -- <file.rs> <EntityName> <target_dir> [entity_type]
-# Example:
-# cargo run -- src/repos/requests.rs RequestsRepo ./src/repos
+cargo run -- <file.rs> <EntityName> <target_dir> [--types=struct,fn] [--no-reexport]
 ```
 
-### Auto-Split a Single File
-Automatically finds all entities in a file, determines the safest topological dependency order, and extracts them one by one into individual files.
-```bash
-cargo run -- <file.rs> SPLIT <target_dir>
-# Example:
-# cargo run -- src/repos/leases.rs SPLIT src/repos/
-```
-
-### Auto-Split an Entire Directory
-Recursively scans a directory for `.rs` files and runs the `SPLIT` operation on all of them, ignoring crate/module roots (`lib.rs`, `mod.rs`, `main.rs`). Progress is tracked in-place in the terminal.
-```bash
-cargo run -- SPLIT_DIR <target_dir>
-# Example:
-# cargo run -- SPLIT_DIR src/repos/
-```
+### Batch Tools
+- **Split File**: `cargo run -- <file.rs> SPLIT <target_dir>`
+- **Split Directory**: `cargo run -- SPLIT_DIR <target_dir>`
+- **Analyze Deps**: `cargo run -- . ANALYZE_DEPS <dir>`
+- **Find Dead Code**: `cargo run -- . FIND_DEAD_CODE <dir>`
+- **Preflight**: `cargo run -- . PREFLIGHT <Cargo.toml>`
+- **Rename**: `cargo run -- <file.rs> RENAME <old> <new>`
+- **SSR**: `cargo run -- <file.rs> SSR <pattern> <replacement>`
+- **Expand**: `cargo run -- . EXPAND <target>`
 
 ## Conventions Enforced
 
-- **One entity per file** — no bundling
-- **Snake_case filenames** — e.g. `MyStruct` becomes `my_struct.rs`
-- **No re-export index files** — never create mod.rs that only re-exports
-- **Tests travel with entities** — extracted to `{entity}_tests.rs`
-- **Cross-file updates** — `use` paths updated in all affected files
-- **Compilable before & after** — fixture project survives refactoring
+- **One entity per file** — no bundling.
+- **Snake_case filenames** — e.g. `MyStruct` becomes `my_struct.rs`.
+- **No re-export index files** — never create mod.rs that only re-exports.
+- **Tests travel with entities** — extracted to `{entity}_tests.rs`.
+- **Cross-file updates** — `use` paths updated in all affected files.
