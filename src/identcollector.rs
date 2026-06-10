@@ -45,6 +45,10 @@ impl<'a> Visit<'a> for IdentCollector {
         syn::visit::visit_macro(self, &mac.mac);
         self.scan_token_stream(mac.mac.tokens.clone());
     }
+    fn visit_item_macro(&mut self, mac: &'a syn::ItemMacro) {
+        syn::visit::visit_macro(self, &mac.mac);
+        self.scan_token_stream(mac.mac.tokens.clone());
+    }
 }
 impl IdentCollector {
     fn scan_token_stream(&mut self, tokens: proc_macro2::TokenStream) {
@@ -59,5 +63,28 @@ impl IdentCollector {
                 _ => {}
             }
         }
+    }
+}
+
+/// Collects first-segment identifiers from multi-segment paths (e.g. `dispatch` from `dispatch::Sender`).
+/// These are bare module names that may need explicit `use` imports when moved to a different scope.
+pub struct BarePathCollector {
+    pub bare_modules: HashSet<String>,
+}
+impl<'a> Visit<'a> for BarePathCollector {
+    fn visit_path(&mut self, path: &'a syn::Path) {
+        if path.segments.len() >= 2 {
+            let first = path.segments[0].ident.to_string();
+            // Only collect lowercase (module-like) names, skip type names and language keywords
+            if first.chars().next().map(|c| c.is_lowercase()).unwrap_or(false)
+                && !matches!(
+                    first.as_str(),
+                    "crate" | "self" | "super" | "std" | "core" | "alloc" | "r#"
+                )
+            {
+                self.bare_modules.insert(first);
+            }
+        }
+        syn::visit::visit_path(self, path);
     }
 }

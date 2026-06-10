@@ -10,6 +10,9 @@ pub fn update_parent_mod(target_folder: &str, entity_name: &str) {
     if !module_file.exists() {
         module_file = PathBuf::from(target_folder).join("main.rs");
     }
+    if !module_file.exists() {
+        module_file = PathBuf::from(format!("{}.rs", target_folder));
+    }
     let content = match std::fs::read_to_string(&module_file) {
         Ok(c) => c,
         Err(_) => return,

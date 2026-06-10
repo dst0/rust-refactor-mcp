@@ -202,3 +202,47 @@ fn extract_status_from_medium() {
     );
     std::fs::remove_dir_all(&project).ok();
 }
+
+#[test]
+fn extract_greet_from_simple() {
+    let project = copy_fixture();
+    let src_dir = project.join("src");
+
+    assert!(
+        cargo_check(&project),
+        "Fixture should compile before extraction"
+    );
+
+    let file_path = src_dir.join("simple.rs");
+    run_extract(
+        file_path.to_str().unwrap(),
+        "greet",
+        src_dir.to_str().unwrap(),
+    );
+
+    // greet_impl.rs created
+    let greet_file = src_dir.join("greet_impl.rs");
+    assert!(greet_file.exists(), "greet_impl.rs should exist");
+    let greet_content = fs::read_to_string(&greet_file).unwrap();
+    assert!(greet_content.contains("pub fn greet"));
+
+    // simple.rs updated — greet re-exported
+    let simple_content = fs::read_to_string(&file_path).unwrap();
+    assert!(
+        simple_content.contains("pub mod greet_impl"),
+        "simple.rs should contain 'pub mod greet_impl', but got:\n{}",
+        simple_content
+    );
+    assert!(
+        simple_content.contains("pub use crate::greet_impl::greet"),
+        "simple.rs should contain 'pub use crate::greet_impl::greet', but got:\n{}",
+        simple_content
+    );
+
+    // Project compiles after extraction
+    assert!(
+        cargo_check(&project),
+        "Project should compile after greet extraction"
+    );
+    std::fs::remove_dir_all(&project).ok();
+}

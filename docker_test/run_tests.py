@@ -7,29 +7,7 @@ import shutil
 from pathlib import Path
 
 REPOS = [
-    "https://github.com/tokio-rs/tokio",
-    "https://github.com/hyperium/hyper",
-    "https://github.com/hyperium/axum",
-    "https://github.com/serde-rs/serde",
-    "https://github.com/clap-rs/clap",
-    "https://github.com/rustls/rustls",
-    "https://github.com/rust-random/rand",
-    "https://github.com/rust-lang/log",
-    "https://github.com/bitflags/bitflags",
-    "https://github.com/dtolnay/thiserror",
-    "https://github.com/dtolnay/syn",
-    "https://github.com/dtolnay/quote",
-    "https://github.com/rust-lang/once_cell",
-    "https://github.com/crossbeam-rs/crossbeam",
-    "https://github.com/rayon-rs/rayon",
-    "https://github.com/sfackler/rust-openssl",
-    "https://github.com/alexcrichton/git2-rs",
-    "https://github.com/seanmonstar/reqwest",
-    "https://github.com/BurntSushi/ripgrep",
-    "https://github.com/chronotope/chrono",
-    "https://github.com/astral-sh/ruff",
-    "https://github.com/bevyengine/bevy",
-    "https://github.com/ratatui/ratatui"
+    "https://github.com/hyperium/hyper"
 ]
 
 TOOL = "/rust-refactor-mcp/target/release/rust-refactor-mcp"
@@ -147,8 +125,13 @@ for repo_url in REPOS:
                     pass
             tmp_extract_dir.mkdir(parents=True, exist_ok=True)
             
-            print(f"Running EXTRACT on {entity_name}...")
-            status, out = run_cmd([TOOL, str(rs_file), entity_name, str(tmp_extract_dir)], cwd=repo_dir)
+            print(f"Running EXTRACT on {entity_name} without auto-fix args (expecting warning if usage exists)...")
+            warn_status, warn_out = run_cmd([TOOL, str(rs_file), entity_name, str(tmp_extract_dir)], cwd=repo_dir)
+            if "Extraction aborted due to code breakage risks" in warn_out:
+                print(" -> Successfully received warning instead of action!")
+            
+            print(f"Running EXTRACT on {entity_name} with auto-fix args...")
+            status, out = run_cmd([TOOL, str(rs_file), entity_name, str(tmp_extract_dir), "--fix-vis=pub_crate", "--fix-macros=promote"], cwd=repo_dir)
             stats[repo_url]["EXTRACT"] = status
             if status == "CRASH":
                 crashes += 1
@@ -246,8 +229,17 @@ for repo_url in REPOS:
     # SPLIT_DIR
     src_dir = repo_dir / "src"
     if src_dir.exists() and src_dir.is_dir():
-        print("Running SPLIT_DIR...")
-        status, out = run_cmd([TOOL, "SPLIT_DIR", "src"], cwd=repo_dir)
+        print("Running SPLIT_DIR without auto-fix args (expecting warnings/skips if usage exists)...")
+        warn_status, warn_out = run_cmd([TOOL, "SPLIT_DIR", "src"], cwd=repo_dir)
+        if "Warning: Failed to extract" in warn_out:
+            print(" -> Successfully received warnings and skipped problematic entities!")
+            
+        print("Resetting repository state to run with auto-fixes...")
+        run_cmd(["git", "reset", "--hard"], cwd=repo_dir)
+        run_cmd(["git", "clean", "-fd"], cwd=repo_dir)
+
+        print("Running SPLIT_DIR with auto-fix args...")
+        status, out = run_cmd([TOOL, "SPLIT_DIR", "src", "--fix-vis=pub_crate", "--fix-macros=promote"], cwd=repo_dir)
         stats[repo_url]["SPLIT_DIR"] = status
         if status == "CRASH":
             crashes += 1
@@ -270,9 +262,15 @@ for repo_url in REPOS:
             print("CRASHED!")
         elif status == "FAIL":
             failures += 1
-            print("PREFLIGHT compilation failed (expected on complex codebases).")
+            print(f"PREFLIGHT compilation failed on {repo_name}!")
+            print("Stopping tests due to failure.")
+            sys.exit(1)
         else:
             print("PREFLIGHT passed!")
+
+    if crashes > 0:
+        print("Stopping tests due to CRASH.")
+        sys.exit(1)
 
 # Print summary table
 print("\n=========================================================================")

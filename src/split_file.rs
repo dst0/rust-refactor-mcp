@@ -1,5 +1,5 @@
 use crate::dependency_graph::DependencyGraph;
-use crate::extract::{extract_entity, get_item_name, item_type, to_snake_case};
+use crate::extract::{compute_module_name, extract_entity, get_item_name, item_type};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
@@ -53,8 +53,16 @@ pub fn split_file(
     let mut extracted_files = Vec::new();
     let total_unique = unique_names.len();
     for (idx, name) in unique_names.into_iter().enumerate() {
-        // Skip if the entity name matches the current file name (already "split")
-        if to_snake_case(&name) == source_stem {
+        let items_for_type_check: Vec<Item> = {
+            let current_source_check = fs::read_to_string(file_path).unwrap_or_default();
+            if let Ok(p) = parse_file(&current_source_check) {
+                p.items.into_iter().filter(|item| get_item_name(item).as_deref() == Some(&name)).collect()
+            } else {
+                Vec::new()
+            }
+        };
+        let new_module = compute_module_name(&name, &items_for_type_check);
+        if new_module == source_stem {
             continue;
         }
 
@@ -151,7 +159,7 @@ pub fn split_folder_entities(
 
     for (idx, (file, count)) in multi_entity.into_iter().enumerate() {
         let file_str = file.to_string_lossy().to_string();
-        let target_folder = file.parent().unwrap().to_string_lossy().to_string();
+        let target_folder = file.with_extension("").to_string_lossy().to_string();
 
         // Skip entry points
         let stem = file

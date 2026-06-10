@@ -8,4 +8,4 @@ RUN cargo build --release
 WORKDIR /test
 COPY docker_test/run_tests.py /test/run_tests.py
 RUN chmod +x /test/run_tests.py
-ENTRYPOINT ["/test/run_tests.py"]
+ENTRYPOINT ["python3", "-u", "/test/run_tests.py"]

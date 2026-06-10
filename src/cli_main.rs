@@ -18,11 +18,11 @@ pub fn cli_main(args: &[String]) {
         println!();
         println!("Usage:");
         println!("  Single Entity Extraction:");
-        println!("    cargo run -- <file.rs> <EntityName> <target_dir> [--types=struct,fn] [--no-reexport]");
+        println!("    cargo run -- <file.rs> <EntityName> <target_dir> [--types=struct,fn] [--no-reexport] [--fix-vis=pub_crate] [--fix-macros=promote]");
         println!();
         println!("  Batch Tools:");
-        println!("    cargo run -- <file.rs> SPLIT <target_dir> [--no-reexport]");
-        println!("    cargo run -- SPLIT_DIR <dir_path> [--no-reexport]");
+        println!("    cargo run -- <file.rs> SPLIT <target_dir> [--no-reexport] [--fix-vis=pub_crate] [--fix-macros=promote]");
+        println!("    cargo run -- SPLIT_DIR <dir_path> [--no-reexport] [--fix-vis=pub_crate] [--fix-macros=promote]");
         println!("    cargo run -- . ANALYZE_DEPS <dir_path>");
         println!("    cargo run -- . FIND_DEAD_CODE <dir_path>");
         println!("    cargo run -- . PREFLIGHT <Cargo.toml_path>");
@@ -37,9 +37,18 @@ pub fn cli_main(args: &[String]) {
         println!("  Options:");
         println!("    --no-reexport    Disable 'pub use' re-exports in the original file.");
         println!("    --types=<types>  Comma-separated list of entity types to include.");
+        println!("    --fix-vis=<vis>  Visibility auto-fix strategy (e.g. pub_crate).");
+        println!("    --fix-macros=<m> Macro auto-fix strategy (e.g. promote).");
         println!("    --help, -h       Show this help message.");
         return;
     }
+
+    let fix_vis = args.iter().find(|a| a.starts_with("--fix-vis=")).map(|a| {
+        a.trim_start_matches("--fix-vis=")
+    });
+    let fix_macros = args.iter().find(|a| a.starts_with("--fix-macros=")).map(|a| {
+        a.trim_start_matches("--fix-macros=")
+    });
 
     let first = &args[0];
 
@@ -56,7 +65,7 @@ pub fn cli_main(args: &[String]) {
                 .collect()
         });
         handle_result(
-            split_folder_entities(dir_path, generate_reexport, entity_types, None, None),
+            split_folder_entities(dir_path, generate_reexport, entity_types, fix_vis, fix_macros),
             "Split directory failed",
         );
         return;
@@ -107,8 +116,8 @@ pub fn cli_main(args: &[String]) {
                 None,
                 generate_reexport,
                 entity_types,
-                None,
-                None,
+                fix_vis,
+                fix_macros,
             ),
             "Split failed",
         );
@@ -256,8 +265,8 @@ pub fn cli_main(args: &[String]) {
             Some(file_path),
             None,
             generate_reexport,
-            None,
-            None,
+            fix_vis,
+            fix_macros,
         ),
         "Extraction failed",
     );
