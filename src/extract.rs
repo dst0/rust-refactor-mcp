@@ -174,7 +174,12 @@ pub fn extract_entity(
     let same_file = source_stem.as_deref() == Some(&new_module);
     let file_path = PathBuf::from(source_file_path.unwrap_or(""));
     let parent_dir = file_path.parent().unwrap_or(Path::new(""));
-    let new_path = parent_dir.join(format!("{}.rs", new_module));
+    let mod_dir = parent_dir.join(&new_module);
+    let new_path = if mod_dir.is_dir() {
+        mod_dir.join("mod.rs")
+    } else {
+        parent_dir.join(format!("{}.rs", new_module))
+    };
     let new_file_path = if same_file {
         source_file_path.map(|p| p.to_string()).unwrap_or_default()
     } else {
