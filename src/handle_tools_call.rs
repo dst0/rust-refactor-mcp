@@ -178,8 +178,14 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
                 });
             let fix_vis = args.get("fix_vis").and_then(Value::as_str);
             let fix_macros = args.get("fix_macros").and_then(Value::as_str);
-            crate::split_file::split_folder_entities(dir_path, generate_reexport, entity_types, fix_vis, fix_macros)
-                .map_err(|e| e.to_string())?;
+            crate::split_file::split_folder_entities(
+                dir_path,
+                generate_reexport,
+                entity_types,
+                fix_vis,
+                fix_macros,
+            )
+            .map_err(|e| e.to_string())?;
             Ok(
                 json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : format!("Successfully split directory: {}", dir_path) }] } }),
             )

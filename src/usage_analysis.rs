@@ -1,5 +1,5 @@
 use syn::visit::Visit;
-use syn::{ExprField, ExprStruct, PatStruct, Macro};
+use syn::{ExprField, ExprStruct, Macro, PatStruct};
 
 pub struct FieldUsageVisitor<'a> {
     pub target_fields: Vec<&'a str>,
@@ -19,7 +19,9 @@ impl<'ast, 'a> Visit<'ast> for FieldUsageVisitor<'a> {
     fn visit_expr_field(&mut self, node: &'ast ExprField) {
         if let syn::Member::Named(ident) = &node.member {
             let field_name = ident.to_string();
-            if self.target_fields.contains(&field_name.as_str()) && !self.used_fields.contains(&field_name) {
+            if self.target_fields.contains(&field_name.as_str())
+                && !self.used_fields.contains(&field_name)
+            {
                 self.used_fields.push(field_name);
             }
         }
@@ -30,7 +32,9 @@ impl<'ast, 'a> Visit<'ast> for FieldUsageVisitor<'a> {
         for field in &node.fields {
             if let syn::Member::Named(ident) = &field.member {
                 let field_name = ident.to_string();
-                if self.target_fields.contains(&field_name.as_str()) && !self.used_fields.contains(&field_name) {
+                if self.target_fields.contains(&field_name.as_str())
+                    && !self.used_fields.contains(&field_name)
+                {
                     self.used_fields.push(field_name);
                 }
             }
@@ -42,7 +46,9 @@ impl<'ast, 'a> Visit<'ast> for FieldUsageVisitor<'a> {
         for field in &node.fields {
             if let syn::Member::Named(ident) = &field.member {
                 let field_name = ident.to_string();
-                if self.target_fields.contains(&field_name.as_str()) && !self.used_fields.contains(&field_name) {
+                if self.target_fields.contains(&field_name.as_str())
+                    && !self.used_fields.contains(&field_name)
+                {
                     self.used_fields.push(field_name);
                 }
             }
@@ -69,7 +75,9 @@ impl<'ast, 'a> Visit<'ast> for MacroUsageVisitor<'a> {
     fn visit_macro(&mut self, node: &'ast Macro) {
         if let Some(ident) = node.path.get_ident() {
             let mac_name = ident.to_string();
-            if self.target_macros.contains(&mac_name.as_str()) && !self.used_macros.contains(&mac_name) {
+            if self.target_macros.contains(&mac_name.as_str())
+                && !self.used_macros.contains(&mac_name)
+            {
                 self.used_macros.push(mac_name);
             }
         }

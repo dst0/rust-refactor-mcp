@@ -76,7 +76,11 @@ impl<'a> Visit<'a> for BarePathCollector {
         if path.segments.len() >= 2 {
             let first = path.segments[0].ident.to_string();
             // Only collect lowercase (module-like) names, skip type names and language keywords
-            if first.chars().next().map(|c| c.is_lowercase()).unwrap_or(false)
+            if first
+                .chars()
+                .next()
+                .map(|c| c.is_lowercase())
+                .unwrap_or(false)
                 && !matches!(
                     first.as_str(),
                     "crate" | "self" | "super" | "std" | "core" | "alloc" | "r#"

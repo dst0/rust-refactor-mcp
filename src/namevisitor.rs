@@ -210,7 +210,18 @@ mod tests {
     }
     #[test]
     pub fn extract_invalid_syntax() {
-        let err = extract_entity("not rust !!!", "Foo", ".", None, None, None, true, None, None).unwrap_err();
+        let err = extract_entity(
+            "not rust !!!",
+            "Foo",
+            ".",
+            None,
+            None,
+            None,
+            true,
+            None,
+            None,
+        )
+        .unwrap_err();
         assert!(err.contains("Parse error"));
     }
     #[test]

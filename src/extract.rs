@@ -18,7 +18,9 @@ pub fn compute_module_name(entity_name: &str, items: &[Item]) -> String {
     });
     let is_fn = items.iter().any(|item| matches!(item, Item::Fn(_)));
     let is_macro = items.iter().any(|item| matches!(item, Item::Macro(_)));
-    let is_const = items.iter().any(|item| matches!(item, Item::Const(_) | Item::Static(_)));
+    let is_const = items
+        .iter()
+        .any(|item| matches!(item, Item::Const(_) | Item::Static(_)));
 
     if new_module == entity_name {
         if is_type {
@@ -88,8 +90,11 @@ pub fn extract_entity(
             }
         }
     }
-    
-    let target_fields: Vec<&str> = extracted_private_fields.iter().map(|s| s.as_str()).collect();
+
+    let target_fields: Vec<&str> = extracted_private_fields
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
     let target_macros: Vec<&str> = extracted_macros.iter().map(|s| s.as_str()).collect();
     let mut field_visitor = crate::usage_analysis::FieldUsageVisitor::new(target_fields);
     let mut macro_visitor = crate::usage_analysis::MacroUsageVisitor::new(target_macros);
@@ -104,10 +109,16 @@ pub fn extract_entity(
         issues.push(format!("Private fields {:?} are used in the remaining code. Pass --fix-vis=pub_crate to auto-fix.", field_visitor.used_fields));
     }
     if !macro_visitor.used_macros.is_empty() && fix_macros != Some("promote") {
-        issues.push(format!("Macros {:?} are used in the remaining code. Pass --fix-macros=promote to auto-fix.", macro_visitor.used_macros));
+        issues.push(format!(
+            "Macros {:?} are used in the remaining code. Pass --fix-macros=promote to auto-fix.",
+            macro_visitor.used_macros
+        ));
     }
     if !issues.is_empty() {
-        return Err(format!("Extraction aborted due to code breakage risks:\n{}", issues.join("\n")));
+        return Err(format!(
+            "Extraction aborted due to code breakage risks:\n{}",
+            issues.join("\n")
+        ));
     }
 
     if fix_vis == Some("pub_crate") && !field_visitor.used_fields.is_empty() {
@@ -126,17 +137,43 @@ pub fn extract_entity(
         }
     }
 
+    let mut new_module = compute_module_name(entity_name, &extracted);
+    for item in &parsed.items {
+        if let Item::Use(iu) = item {
+            let names = collect_use_names(&iu.tree);
+            if names.contains(&new_module) {
+                new_module = format!("{}_mod", new_module);
+                break;
+            }
+        }
+    }
+    let source_stem = source_file_path.as_ref().and_then(|p| {
+        PathBuf::from(p)
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+    });
+    let same_file = source_stem.as_deref() == Some(&new_module);
+    let file_path = PathBuf::from(source_file_path.unwrap_or(""));
+    let target_dir = Path::new(target_folder);
+    let mod_dir = target_dir.join(&new_module);
+    let new_path = if mod_dir.is_dir() {
+        mod_dir.join("mod.rs")
+    } else {
+        target_dir.join(format!("{}.rs", new_module))
+    };
+    let relative_mod_path = get_crate_relative_mod_path(&new_path);
+
     let mut macro_promotions = Vec::new();
     if fix_macros == Some("promote") && !macro_visitor.used_macros.is_empty() {
         for mac_name in &macro_visitor.used_macros {
             let ident = syn::Ident::new(mac_name, proc_macro2::Span::call_site());
             let pub_use: Item = syn::parse_quote!(pub(crate) use #ident;);
             macro_promotions.push(pub_use);
-            
-            let new_module = compute_module_name(entity_name, &extracted);
-            let mod_ident = syn::Ident::new(&new_module, proc_macro2::Span::call_site());
-            let use_import: Item = syn::parse_quote!(use crate::#mod_ident::#ident;);
-            remaining.insert(0, use_import);
+
+            let use_str = format!("use crate::{}::{};", relative_mod_path, mac_name);
+            if let Ok(use_import) = syn::parse_str::<Item>(&use_str) {
+                remaining.insert(0, use_import);
+            }
         }
     }
     let mut all_spans: Vec<ByteSpan> = Vec::new();
@@ -155,31 +192,7 @@ pub fn extract_entity(
     for tfn in &test_items {
         items_extracted.push(format!("test: {}", tfn.sig.ident));
     }
-    let mut new_module = compute_module_name(entity_name, &extracted);
-    // Check for naming collisions with existing imports
-    for item in &parsed.items {
-        if let Item::Use(iu) = item {
-            let names = collect_use_names(&iu.tree);
-            if names.contains(&new_module) {
-                new_module = format!("{}_mod", new_module);
-                break;
-            }
-        }
-    }
-    let source_stem = source_file_path.as_ref().and_then(|p| {
-        PathBuf::from(p)
-            .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-    });
-    let same_file = source_stem.as_deref() == Some(&new_module);
-    let file_path = PathBuf::from(source_file_path.unwrap_or(""));
-    let parent_dir = file_path.parent().unwrap_or(Path::new(""));
-    let mod_dir = parent_dir.join(&new_module);
-    let new_path = if mod_dir.is_dir() {
-        mod_dir.join("mod.rs")
-    } else {
-        parent_dir.join(format!("{}.rs", new_module))
-    };
+    // (Module name, parent_dir, new_path, etc. computed above before macro_promotions)
     let new_file_path = if same_file {
         source_file_path.map(|p| p.to_string()).unwrap_or_default()
     } else {
@@ -212,7 +225,11 @@ pub fn extract_entity(
 
         if !already_exists {
             // Collect names already defined in new_file (e.g. from a prior extraction pass)
-            let already_defined: HashSet<String> = new_file.items.iter().filter_map(|item| get_item_name(item)).collect();
+            let already_defined: HashSet<String> = new_file
+                .items
+                .iter()
+                .filter_map(|item| get_item_name(item))
+                .collect();
 
             for imp in &needed_imports {
                 // Skip imports whose name conflicts with existing definitions
@@ -240,7 +257,53 @@ pub fn extract_entity(
             for promo in macro_promotions {
                 new_file.items.push(promo);
             }
-            let cross_refs = detect_cross_refs_for_extracted(&parsed, &extracted, entity_name, source_file_path);
+
+            // Shift super and self paths since file is moved one level deeper
+            struct SuperPathRewriter;
+            impl syn::visit_mut::VisitMut for SuperPathRewriter {
+                fn visit_path_mut(&mut self, p: &mut syn::Path) {
+                    if p.segments
+                        .first()
+                        .map(|s| s.ident == "super")
+                        .unwrap_or(false)
+                    {
+                        let mut new_segments = syn::punctuated::Punctuated::new();
+                        new_segments.push(syn::PathSegment {
+                            ident: syn::Ident::new("super", proc_macro2::Span::call_site()),
+                            arguments: syn::PathArguments::None,
+                        });
+                        for seg in p.segments.clone() {
+                            new_segments.push(seg);
+                        }
+                        p.segments = new_segments;
+                    } else if p.segments.len() > 1
+                        && p.segments
+                            .first()
+                            .map(|s| s.ident == "self")
+                            .unwrap_or(false)
+                    {
+                        let mut new_segments = syn::punctuated::Punctuated::new();
+                        new_segments.push(syn::PathSegment {
+                            ident: syn::Ident::new("super", proc_macro2::Span::call_site()),
+                            arguments: syn::PathArguments::None,
+                        });
+                        for seg in p.segments.clone().into_iter().skip(1) {
+                            new_segments.push(seg);
+                        }
+                        p.segments = new_segments;
+                    }
+                    syn::visit_mut::visit_path_mut(self, p);
+                }
+                fn visit_item_use_mut(&mut self, item: &mut ItemUse) {
+                    transform_self_to_crate(&mut item.tree);
+                }
+            }
+
+            let mut rewriter = SuperPathRewriter;
+            syn::visit_mut::VisitMut::visit_file_mut(&mut rewriter, &mut new_file);
+
+            let cross_refs =
+                detect_cross_refs_for_extracted(&parsed, &extracted, entity_name, source_file_path);
             for imp in cross_refs {
                 let imp_str = quote::quote!(#imp).to_string();
                 let is_dup = new_file.items.iter().any(|existing| {
@@ -256,14 +319,12 @@ pub fn extract_entity(
             }
         }
 
-        // Clean up unused imports in the newly extracted file
         let used_ids_new = collect_referenced_identifiers(&new_file.items);
         let cleaned_new_file = cleanup_imports_in_ast(&new_file, &used_ids_new);
 
-        let filename = format!("{}.rs", new_module);
-        let new_path = PathBuf::from(target_folder).join(&filename);
-        fs::create_dir_all(PathBuf::from(target_folder))
-            .map_err(|e| format!("Cannot create dir: {}", e))?;
+        if let Some(parent) = new_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("Cannot create dir: {}", e))?;
+        }
         let content = prettyplease::unparse(&cleaned_new_file);
         fs::write(&new_path, content).map_err(|e| format!("Cannot write file: {}", e))?;
         let _ = std::process::Command::new("rustfmt")
@@ -319,20 +380,25 @@ pub fn extract_entity(
         }
 
         if generate_reexport && (used_ids.contains(entity_name) || is_pub) {
-            let full_mod_path = format!("crate::{}", new_module);
+            let relative_mod_path = get_crate_relative_mod_path(&new_path);
+            let full_mod_path = format!("crate::{}", relative_mod_path);
             let vis_prefix = if is_pub { "pub " } else { "pub(crate) " };
             let mod_ident = syn::Ident::new(&new_module, proc_macro2::Span::call_site());
             let mod_path = format!("{}.rs", new_module);
-            let vis: syn::Visibility = if is_pub { syn::parse_quote!(pub) } else { syn::parse_quote!(pub(crate)) };
-            let mod_use: Item = syn::parse_quote!(#[path = #mod_path] #vis mod #mod_ident;);
+            let vis: syn::Visibility = if is_pub {
+                syn::parse_quote!(pub)
+            } else {
+                syn::parse_quote!(pub(crate))
+            };
+            let mod_use: Item = syn::parse_quote!(#vis mod #mod_ident;);
             remaining.insert(0, mod_use);
-            
+
             let escaped_entity = escape_path_segment(entity_name);
             let use_str = format!("{}use {}::{};", vis_prefix, full_mod_path, escaped_entity);
             if let Ok(mut source_use) = syn::parse_str::<Item>(&use_str) {
                 if let Item::Use(ref mut iu) = source_use {
-                    if let Some(first_extracted) = extracted.first() {
-                        iu.attrs = get_item_attrs(first_extracted).unwrap_or_default();
+                    if extracted.len() == 1 {
+                        iu.attrs = get_item_attrs(&extracted[0]).unwrap_or_default();
                     }
                 }
                 remaining.insert(1, source_use);
@@ -352,11 +418,13 @@ pub fn extract_entity(
             .arg("2024")
             .arg(source_file_path.unwrap_or("source.rs"))
             .status();
+        // relative_mod_path calculated above
 
         let usage_updated = update_usage_files(
             target_folder,
             entity_name,
             &new_module,
+            &relative_mod_path,
             source_stem.as_deref(),
             source_file_path,
             cached_files,
@@ -432,8 +500,8 @@ pub fn find_extracted_indices(
 }
 pub fn is_test_fn(f: &ItemFn) -> bool {
     f.attrs.iter().any(|a| {
-        a.path().is_ident("test") || 
-        (a.path().is_ident("cfg") && quote::quote!(#a).to_string().contains("test"))
+        a.path().is_ident("test")
+            || (a.path().is_ident("cfg") && quote::quote!(#a).to_string().contains("test"))
     })
 }
 pub fn collect_referenced_identifiers(items: &[Item]) -> HashSet<String> {
@@ -454,13 +522,24 @@ pub fn is_import_used(names: &[String], used_ids: &HashSet<String>) -> bool {
             return true;
         }
         // Special case for traits whose methods are used but trait name is not explicitly mentioned
-        if name == "Spanned" && used_ids.contains("span") {
-            return true;
-        }
-        if name == "Visit" {
-            return true;
-        }
-        if name == "Deserialize" || name == "Serialize" {
+        if name.ends_with("Ext")
+            || name == "Future"
+            || name == "Stream"
+            || name == "Sink"
+            || name == "FusedStream"
+            || name == "Read"
+            || name == "Write"
+            || name == "AsyncRead"
+            || name == "AsyncWrite"
+            || name == "Buf"
+            || name == "BufMut"
+            || name == "Spanned"
+            || name == "Visit"
+            || name == "Deserialize"
+            || name == "Serialize"
+            || name == "Clone"
+            || name == "Debug"
+        {
             return true;
         }
     }
@@ -481,24 +560,49 @@ pub fn cleanup_imports_in_ast(parsed: &File, used_ids: &HashSet<String>) -> File
     });
     cleaned
 }
+
+pub fn get_crate_relative_mod_path(path: &std::path::Path) -> String {
+    let mut parts = Vec::new();
+    for component in path.components() {
+        if let std::path::Component::Normal(c) = component {
+            let s = c.to_string_lossy().to_string();
+            if s == "src" || s == "lib.rs" || s == "main.rs" {
+                continue;
+            }
+            if s.ends_with(".rs") {
+                let stem = s.trim_end_matches(".rs");
+                if stem != "mod" {
+                    parts.push(stem.to_string());
+                }
+            } else {
+                parts.push(s);
+            }
+        }
+    }
+    parts.join("::")
+}
+
 pub fn detect_needed_imports_for_extracted(
     parsed: &File,
-    _extracted: &[Item],
-    entity_name: &str,
+    extracted: &[Item],
+    _entity_name: &str,
 ) -> Vec<ItemUse> {
+    let extracted_names: std::collections::HashSet<String> = extracted
+        .iter()
+        .filter_map(|item| get_item_name(item))
+        .collect();
+
     parsed
         .items
         .iter()
         .filter_map(|item| {
             if let Item::Use(iu) = item {
-                // Skip re-exports that reference the entity itself (added by prior extraction passes)
+                // Skip re-exports that reference the entities themselves (added by prior extraction passes)
                 let names = collect_use_names(&iu.tree);
-                if names.iter().any(|n| n == entity_name) {
+                if names.iter().any(|n| extracted_names.contains(n)) {
                     return None;
                 }
-                let mut new_iu = iu.clone();
-                transform_self_to_crate(&mut new_iu.tree);
-                Some(new_iu)
+                Some(iu.clone())
             } else {
                 None
             }
@@ -546,15 +650,13 @@ pub fn detect_cross_refs_for_extracted(
     let defined: Vec<String> = parsed
         .items
         .iter()
-        .filter_map(|item| match item {
-            Item::Struct(s) if s.ident != entity_name => Some(s.ident.to_string()),
-            Item::Enum(e) if e.ident != entity_name => Some(e.ident.to_string()),
-            Item::Trait(t) if t.ident != entity_name => Some(t.ident.to_string()),
-            Item::Fn(f) if f.sig.ident != entity_name => Some(f.sig.ident.to_string()),
-            Item::Type(t) if t.ident != entity_name => Some(t.ident.to_string()),
-            Item::Const(c) if c.ident != entity_name => Some(c.ident.to_string()),
-            Item::Static(s) if s.ident != entity_name => Some(s.ident.to_string()),
-            _ => None,
+        .filter_map(|item| {
+            if let Some(name) = get_item_name(item) {
+                if name != entity_name {
+                    return Some(name);
+                }
+            }
+            None
         })
         .collect();
     let used = collect_referenced_identifiers(extracted);
@@ -565,31 +667,7 @@ pub fn detect_cross_refs_for_extracted(
     if needed.is_empty() {
         return Vec::new();
     }
-    let mut module_path = "crate".to_string();
-    if let Some(path) = source_file_path {
-        let p = std::path::PathBuf::from(path);
-        let mut parts = Vec::new();
-        for c in p.components() {
-            if let std::path::Component::Normal(n) = c {
-                let s = n.to_str().unwrap();
-                if s != "src" {
-                    if s.ends_with(".rs") {
-                        let stem = s.trim_end_matches(".rs");
-                        if stem != "mod" && stem != "lib" && stem != "main" {
-                            parts.push(escape_path_segment(stem));
-                        }
-                    } else {
-                        parts.push(escape_path_segment(s));
-                    }
-                }
-            }
-        }
-        if !parts.is_empty() {
-            module_path = format!("crate::{}", parts.join("::"));
-        }
-    } else {
-        module_path = "super".to_string();
-    }
+    let module_path = "super".to_string();
     let escaped_names: Vec<String> = needed.iter().map(|n| escape_path_segment(n)).collect();
     let names = escaped_names.join(", ");
     let use_str = format!("use {}::{{{}}};", module_path, names);
@@ -609,6 +687,7 @@ pub fn update_usage_files(
     target_folder: &str,
     entity_name: &str,
     new_module_name: &str,
+    relative_mod_path: &str,
     old_module_hint: Option<&str>,
     exclude_path: Option<&str>,
     cached_files: Option<&Vec<PathBuf>>,
@@ -682,133 +761,6 @@ pub fn update_usage_files(
         let mut extracted_attrs: Vec<syn::Attribute> = Vec::new();
         for item in parsed.items {
             match &item {
-                Item::Use(iu) if has_use_ref(entity_name, &iu.tree) => {
-                    if !iu.attrs.is_empty() {
-                        extracted_attrs = iu.attrs
-                            .iter()
-                            .filter(|a| a.path().is_ident("cfg"))
-                            .cloned()
-                            .collect();
-                    }
-                    let prefix = extract_module_path(&iu.tree, entity_name);
-                    let prefix_last = prefix.split("::").last().unwrap_or("");
-                    let matches_old_mod = if let Some(ref om) = old_mod {
-                        let is_crate_root = om == "lib" || om == "main";
-                        let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                        let parent_dir = path.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("");
-                        let is_same_mod = file_stem == *om || parent_dir == *om;
-                        let prefix_first = prefix.split("::").next().unwrap_or("");
-                        // Only match crate-internal imports (crate::, self::, super::, or relative)
-                        let is_crate_internal = prefix_first.is_empty()
-                            || prefix_first == "crate"
-                            || prefix_first == "self"
-                            || prefix_first == "super"
-                            || prefix_first == *om;
-                        
-                        is_crate_internal && (
-                            (prefix_last.is_empty() && is_same_mod)
-                            || (prefix_last == "super" && is_same_mod)
-                            || (prefix_last == "self" && is_same_mod)
-                            || prefix_last == *om 
-                            || (prefix_last == "crate" && is_crate_root)
-                        )
-                    } else {
-                        true
-                    };
-                    if !matches_old_mod {
-                        new_items.push(item);
-                        continue;
-                    }
-                    changed = true;
-                    let vis = &iu.vis;
-                    let vis_prefix = if matches!(vis, syn::Visibility::Inherited) {
-                        String::new()
-                    } else {
-                        format!("{} ", quote::quote!(#vis))
-                    };
-                    fn get_all_paths(tree: &syn::UseTree, mut current: Vec<String>) -> Vec<Vec<String>> {
-                        match tree {
-                            syn::UseTree::Path(p) => {
-                                current.push(p.ident.to_string());
-                                get_all_paths(&p.tree, current)
-                            }
-                            syn::UseTree::Name(n) => {
-                                current.push(n.ident.to_string());
-                                vec![current]
-                            }
-                            syn::UseTree::Rename(r) => {
-                                current.push(r.ident.to_string());
-                                current.push(format!("as {}", r.rename));
-                                vec![current]
-                            }
-                            syn::UseTree::Group(g) => {
-                                let mut paths = Vec::new();
-                                for item in &g.items {
-                                    paths.extend(get_all_paths(item, current.clone()));
-                                }
-                                paths
-                            }
-                            syn::UseTree::Glob(_) => {
-                                current.push("*".to_string());
-                                vec![current]
-                            }
-                        }
-                    }
-
-                    let paths = get_all_paths(&iu.tree, Vec::new());
-                    for path in paths {
-                        // Find the leaf position: last segment that isn't "as ..." or "*"
-                        let leaf_idx = path.iter().rposition(|s| !s.starts_with("as ") && s != "*");
-                        // Check if the leaf segment matches entity_name
-                        if let Some(idx) = leaf_idx.filter(|&i| path[i] == entity_name) {
-                            // It's the entity or something inside it (like an enum variant)!
-                            // Path should be full_mod_path::entity_name::[rest...]
-                            let full_mod_path = format!("crate::{}", new_module);
-                            let mut new_path_str = format!("{}::{}", full_mod_path, escape_path_segment(entity_name));
-                            for segment in &path[idx + 1..] {
-                                if segment.starts_with("as ") {
-                                    new_path_str.push_str(&format!(" {}", segment));
-                                } else if segment == "*" {
-                                    new_path_str.push_str("::*");
-                                } else {
-                                    new_path_str.push_str(&format!("::{}", escape_path_segment(segment)));
-                                }
-                            }
-                            let use_str = format!("{}use {};", vis_prefix, new_path_str);
-                            if let Ok(mut parsed_use) = syn::parse_str::<ItemUse>(&use_str) {
-                                parsed_use.attrs = extracted_attrs.clone();
-                                new_items.push(Item::Use(parsed_use));
-                            } else {
-                                println!("WARNING: Failed to parse generated use (idx block): {}", use_str);
-                            }
-                        } else {
-                            // Unrelated item in the same group import. Keep it as is!
-                            // Skip `self` imports (use super::self is invalid outside braces)
-                            let last_meaningful = path.iter().filter(|s| !s.starts_with("as ")).last().map(|s| s.as_str());
-                            if last_meaningful == Some("self") {
-                                continue;
-                            }
-                            let mut new_path_str = String::new();
-                            for (i, segment) in path.iter().enumerate() {
-                                if segment.starts_with("as ") {
-                                    new_path_str.push_str(&format!(" {}", segment));
-                                } else if segment == "*" {
-                                    new_path_str.push_str("*");
-                                } else {
-                                    new_path_str.push_str(&escape_path_segment(segment));
-                                    if i < path.len() - 1 && !path[i+1].starts_with("as ") {
-                                        new_path_str.push_str("::");
-                                    }
-                                }
-                            }
-                            let use_str = format!("{}use {};", vis_prefix, new_path_str);
-                            if let Ok(mut parsed_use) = syn::parse_str::<ItemUse>(&use_str) {
-                                parsed_use.attrs = extracted_attrs.clone();
-                                new_items.push(Item::Use(parsed_use));
-                            }
-                        }
-                    }
-                }
                 _ => {
                     new_items.push(item);
                 }
@@ -949,7 +901,14 @@ pub fn collect_use_names(tree: &UseTree) -> Vec<String> {
     let mut names = Vec::new();
     match tree {
         UseTree::Path(p) => {
-            names.extend(collect_use_names(&p.tree));
+            let inner_names = collect_use_names(&p.tree);
+            for name in inner_names {
+                if name == "self" {
+                    names.push(p.ident.to_string());
+                } else {
+                    names.push(name);
+                }
+            }
         }
         UseTree::Name(n) => {
             names.push(n.ident.to_string());
@@ -970,7 +929,9 @@ pub fn collect_use_names(tree: &UseTree) -> Vec<String> {
 pub fn make_item_pub(item: &mut Item) {
     let pub_vis = syn::Visibility::Public(syn::token::Pub::default());
     let promote_vis = |vis: &mut syn::Visibility| {
-        if matches!(vis, syn::Visibility::Inherited) || matches!(vis, syn::Visibility::Restricted(_)) {
+        if matches!(vis, syn::Visibility::Inherited)
+            || matches!(vis, syn::Visibility::Restricted(_))
+        {
             *vis = pub_vis.clone();
         }
     };
@@ -1008,7 +969,7 @@ pub fn make_item_pub(item: &mut Item) {
 }
 
 pub fn is_item_pub(item: &Item) -> bool {
-    matches!(get_item_vis(item), Some(syn::Visibility::Public(_)))
+    matches!(get_item_vis(item), Some(vis) if !matches!(vis, syn::Visibility::Inherited))
 }
 
 pub fn get_item_vis(item: &Item) -> Option<syn::Visibility> {
@@ -1021,6 +982,25 @@ pub fn get_item_vis(item: &Item) -> Option<syn::Visibility> {
         Item::Const(c) => Some(c.vis.clone()),
         Item::Static(s) => Some(s.vis.clone()),
         Item::Mod(m) => Some(m.vis.clone()),
+        Item::Macro(m) => {
+            let mut iter = m.mac.tokens.clone().into_iter();
+            while let Some(token) = iter.next() {
+                if let proc_macro2::TokenTree::Ident(ref id) = token {
+                    if id == "pub" {
+                        let vis: syn::Visibility = syn::parse_quote!(pub);
+                        return Some(vis);
+                    } else if id == "struct"
+                        || id == "enum"
+                        || id == "static"
+                        || id == "const"
+                        || id == "fn"
+                    {
+                        return Some(syn::Visibility::Inherited);
+                    }
+                }
+            }
+            None
+        }
         _ => None,
     }
 }
@@ -1035,7 +1015,33 @@ pub fn get_item_name(item: &Item) -> Option<String> {
         Item::Static(s) => Some(s.ident.to_string()),
         Item::Type(t) => Some(t.ident.to_string()),
         Item::Mod(m) => Some(m.ident.to_string()),
-        Item::Macro(m) => m.ident.as_ref().map(|id| id.to_string()),
+        Item::Macro(m) => {
+            if let Some(id) = m.ident.as_ref() {
+                return Some(id.to_string());
+            }
+            let mut iter = m.mac.tokens.clone().into_iter();
+            let mut prev_was_struct_or_enum = false;
+            while let Some(token) = iter.next() {
+                if let proc_macro2::TokenTree::Ident(ref id) = token {
+                    if prev_was_struct_or_enum {
+                        return Some(id.to_string());
+                    }
+                    if id == "struct"
+                        || id == "enum"
+                        || id == "static"
+                        || id == "const"
+                        || id == "fn"
+                    {
+                        prev_was_struct_or_enum = true;
+                    }
+                } else if !prev_was_struct_or_enum {
+                    // keep looking
+                } else {
+                    prev_was_struct_or_enum = false;
+                }
+            }
+            None
+        }
         _ => None,
     }
 }
@@ -1160,7 +1166,8 @@ pub fn is_keyword(s: &str) -> bool {
 
 pub fn escape_path_segment(segment: &str) -> String {
     let keywords = [
-        "type", "struct", "enum", "fn", "trait", "impl", "const", "static", "match", "let", "mut", "ref", "pub",
+        "type", "struct", "enum", "fn", "trait", "impl", "const", "static", "match", "let", "mut",
+        "ref", "pub",
     ];
     if keywords.contains(&segment) {
         format!("r#{}", segment)

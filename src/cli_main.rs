@@ -43,12 +43,14 @@ pub fn cli_main(args: &[String]) {
         return;
     }
 
-    let fix_vis = args.iter().find(|a| a.starts_with("--fix-vis=")).map(|a| {
-        a.trim_start_matches("--fix-vis=")
-    });
-    let fix_macros = args.iter().find(|a| a.starts_with("--fix-macros=")).map(|a| {
-        a.trim_start_matches("--fix-macros=")
-    });
+    let fix_vis = args
+        .iter()
+        .find(|a| a.starts_with("--fix-vis="))
+        .map(|a| a.trim_start_matches("--fix-vis="));
+    let fix_macros = args
+        .iter()
+        .find(|a| a.starts_with("--fix-macros="))
+        .map(|a| a.trim_start_matches("--fix-macros="));
 
     let first = &args[0];
 
@@ -65,7 +67,13 @@ pub fn cli_main(args: &[String]) {
                 .collect()
         });
         handle_result(
-            split_folder_entities(dir_path, generate_reexport, entity_types, fix_vis, fix_macros),
+            split_folder_entities(
+                dir_path,
+                generate_reexport,
+                entity_types,
+                fix_vis,
+                fix_macros,
+            ),
             "Split directory failed",
         );
         return;

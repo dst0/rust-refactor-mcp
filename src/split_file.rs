@@ -56,7 +56,10 @@ pub fn split_file(
         let items_for_type_check: Vec<Item> = {
             let current_source_check = fs::read_to_string(file_path).unwrap_or_default();
             if let Ok(p) = parse_file(&current_source_check) {
-                p.items.into_iter().filter(|item| get_item_name(item).as_deref() == Some(&name)).collect()
+                p.items
+                    .into_iter()
+                    .filter(|item| get_item_name(item).as_deref() == Some(&name))
+                    .collect()
             } else {
                 Vec::new()
             }
