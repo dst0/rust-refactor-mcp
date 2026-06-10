@@ -36,6 +36,8 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
                 .unwrap_or(true);
             let source = std::fs::read_to_string(file_path)
                 .map_err(|e| format!("Cannot read file: {}", e))?;
+            let fix_vis = args.get("fix_vis").and_then(Value::as_str);
+            let fix_macros = args.get("fix_macros").and_then(Value::as_str);
             let result = crate::extract::extract_entity(
                 &source,
                 entity_name,
@@ -44,6 +46,8 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
                 Some(file_path),
                 None,
                 generate_reexport,
+                fix_vis,
+                fix_macros,
             )?;
             Ok(
                 json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : format!("Extracted {} → {}\nItems: {}", entity_name, result.new_file_path, result.items_extracted.join(", ")) }] } }),
@@ -172,7 +176,9 @@ pub fn handle_tools_call(id: &Option<Value>, params: &Value) -> Result<Value, St
                         .filter_map(|v| v.as_str().map(|s| s.to_string()))
                         .collect()
                 });
-            crate::split_file::split_folder_entities(dir_path, generate_reexport, entity_types)
+            let fix_vis = args.get("fix_vis").and_then(Value::as_str);
+            let fix_macros = args.get("fix_macros").and_then(Value::as_str);
+            crate::split_file::split_folder_entities(dir_path, generate_reexport, entity_types, fix_vis, fix_macros)
                 .map_err(|e| e.to_string())?;
             Ok(
                 json!({ "jsonrpc" : "2.0", "id" : id, "result" : { "content" : [{ "type" : "text", "text" : format!("Successfully split directory: {}", dir_path) }] } }),

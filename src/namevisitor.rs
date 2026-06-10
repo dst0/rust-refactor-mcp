@@ -137,6 +137,8 @@ mod tests {
             None,
             None,
             true,
+            None,
+            None,
         )
         .unwrap();
         assert!(result.items_extracted.contains(&"struct: Foo".to_string()));
@@ -157,6 +159,8 @@ mod tests {
             None,
             None,
             true,
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(result.items_extracted.len(), 2);
@@ -176,6 +180,8 @@ mod tests {
             None,
             None,
             true,
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(result.items_extracted[0], "enum: Color");
@@ -195,6 +201,8 @@ mod tests {
             None,
             None,
             true,
+            None,
+            None,
         )
         .unwrap_err();
         assert!(err.contains("not found"));
@@ -202,7 +210,7 @@ mod tests {
     }
     #[test]
     pub fn extract_invalid_syntax() {
-        let err = extract_entity("not rust !!!", "Foo", ".", None, None, None, true).unwrap_err();
+        let err = extract_entity("not rust !!!", "Foo", ".", None, None, None, true, None, None).unwrap_err();
         assert!(err.contains("Parse error"));
     }
     #[test]

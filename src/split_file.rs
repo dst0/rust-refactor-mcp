@@ -11,6 +11,8 @@ pub fn split_file(
     cached_files: Option<&Vec<PathBuf>>,
     generate_reexport: bool,
     entity_types: Option<Vec<String>>,
+    fix_vis: Option<&str>,
+    fix_macros: Option<&str>,
 ) -> Result<Vec<String>, String> {
     let initial_source = fs::read_to_string(file_path).map_err(|e| e.to_string())?;
     let parsed = parse_file(&initial_source).map_err(|e| e.to_string())?;
@@ -94,6 +96,8 @@ pub fn split_file(
             Some(file_path),
             cached_files,
             generate_reexport,
+            fix_vis,
+            fix_macros,
         );
 
         match result {
@@ -135,6 +139,8 @@ pub fn split_folder_entities(
     dir_path: &str,
     generate_reexport: bool,
     entity_types: Option<Vec<String>>,
+    fix_vis: Option<&str>,
+    fix_macros: Option<&str>,
 ) -> Result<(), String> {
     println!("Discovering multi-entity files in {}...", dir_path);
     let multi_entity = discover_multi_entity_files(dir_path)?;
@@ -172,6 +178,8 @@ pub fn split_folder_entities(
             Some(&all_files),
             generate_reexport,
             entity_types.clone(),
+            fix_vis,
+            fix_macros,
         ) {
             Ok(extracted) => {
                 if !extracted.is_empty() {

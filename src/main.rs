@@ -31,6 +31,7 @@ pub mod spans;
 pub mod split_file;
 pub mod ssr;
 pub mod update_parent_mod;
+pub mod usage_analysis;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 && (args[1] == "SPLIT_DIR" || args.len() >= 4) {

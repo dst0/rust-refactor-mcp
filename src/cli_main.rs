@@ -56,7 +56,7 @@ pub fn cli_main(args: &[String]) {
                 .collect()
         });
         handle_result(
-            split_folder_entities(dir_path, generate_reexport, entity_types),
+            split_folder_entities(dir_path, generate_reexport, entity_types, None, None),
             "Split directory failed",
         );
         return;
@@ -107,6 +107,8 @@ pub fn cli_main(args: &[String]) {
                 None,
                 generate_reexport,
                 entity_types,
+                None,
+                None,
             ),
             "Split failed",
         );
@@ -254,6 +256,8 @@ pub fn cli_main(args: &[String]) {
             Some(file_path),
             None,
             generate_reexport,
+            None,
+            None,
         ),
         "Extraction failed",
     );

@@ -16,6 +16,8 @@ pub fn extract_entity(
     source_file_path: Option<&str>,
     cached_files: Option<&Vec<PathBuf>>,
     generate_reexport: bool,
+    fix_vis: Option<&str>,
+    fix_macros: Option<&str>,
 ) -> Result<ExtractResult, String> {
     let parsed = syn::parse_file(source).map_err(|e| format!("Parse error: {}", e))?;
     let extracted_indices = find_extracted_indices(&parsed, entity_name, entity_types.as_deref());
@@ -40,6 +42,74 @@ pub fn extract_entity(
             }
         } else {
             remaining.push(item.clone());
+        }
+    }
+
+    let mut extracted_private_fields = Vec::new();
+    let mut extracted_macros = Vec::new();
+    for item in &extracted {
+        if let Item::Struct(s) = item {
+            for field in &s.fields {
+                if let syn::Visibility::Inherited = field.vis {
+                    if let Some(ident) = &field.ident {
+                        extracted_private_fields.push(ident.to_string());
+                    }
+                }
+            }
+        } else if let Item::Macro(m) = item {
+            if let Some(ident) = &m.ident {
+                extracted_macros.push(ident.to_string());
+            }
+        }
+    }
+    
+    let target_fields: Vec<&str> = extracted_private_fields.iter().map(|s| s.as_str()).collect();
+    let target_macros: Vec<&str> = extracted_macros.iter().map(|s| s.as_str()).collect();
+    let mut field_visitor = crate::usage_analysis::FieldUsageVisitor::new(target_fields);
+    let mut macro_visitor = crate::usage_analysis::MacroUsageVisitor::new(target_macros);
+
+    for item in &remaining {
+        syn::visit::Visit::visit_item(&mut field_visitor, item);
+        syn::visit::Visit::visit_item(&mut macro_visitor, item);
+    }
+
+    let mut issues = Vec::new();
+    if !field_visitor.used_fields.is_empty() && fix_vis != Some("pub_crate") {
+        issues.push(format!("Private fields {:?} are used in the remaining code. Pass --fix-vis=pub_crate to auto-fix.", field_visitor.used_fields));
+    }
+    if !macro_visitor.used_macros.is_empty() && fix_macros != Some("promote") {
+        issues.push(format!("Macros {:?} are used in the remaining code. Pass --fix-macros=promote to auto-fix.", macro_visitor.used_macros));
+    }
+    if !issues.is_empty() {
+        return Err(format!("Extraction aborted due to code breakage risks:\n{}", issues.join("\n")));
+    }
+
+    if fix_vis == Some("pub_crate") && !field_visitor.used_fields.is_empty() {
+        for item in &mut extracted {
+            if let Item::Struct(s) = item {
+                for field in &mut s.fields {
+                    if let syn::Visibility::Inherited = field.vis {
+                        if let Some(ident) = &field.ident {
+                            if field_visitor.used_fields.contains(&ident.to_string()) {
+                                field.vis = syn::parse_quote!(pub(crate));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut macro_promotions = Vec::new();
+    if fix_macros == Some("promote") && !macro_visitor.used_macros.is_empty() {
+        for mac_name in &macro_visitor.used_macros {
+            let ident = syn::Ident::new(mac_name, proc_macro2::Span::call_site());
+            let pub_use: Item = syn::parse_quote!(pub(crate) use #ident;);
+            macro_promotions.push(pub_use);
+            
+            let mod_ident = syn::Ident::new(&to_snake_case(entity_name), proc_macro2::Span::call_site());
+            let use_import: Item = syn::parse_quote!(use crate::#mod_ident::#ident;);
+            remaining.insert(0, use_import);
         }
     }
     let mut all_spans: Vec<ByteSpan> = Vec::new();
@@ -85,6 +155,9 @@ pub fn extract_entity(
             let mut item = item.clone();
             make_item_pub(&mut item);
             new_file.items.push(item);
+        }
+        for promo in macro_promotions {
+            new_file.items.push(promo);
         }
         let cross_refs =
             detect_cross_refs_for_extracted(&parsed, &extracted, entity_name, source_file_path);
