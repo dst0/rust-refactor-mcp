@@ -38,6 +38,14 @@ pub fn rename_entity(file_path: &str, old_name: &str, new_name: &str) -> Result<
                 let new_filename = format!("{}.rs", crate::extract::to_snake_case(new_name));
                 let new_path = final_path.with_file_name(new_filename);
                 fs::rename(&final_path, &new_path).map_err(|e| e.to_string())?;
+                
+                // Update parent module if it exists
+                if let Some(parent) = final_path.parent() {
+                    let parent_dir = parent.to_str().unwrap_or(".");
+                    crate::update_parent_mod::remove_from_parent_mod(parent_dir, old_name);
+                    crate::update_parent_mod::update_parent_mod(parent_dir, new_name);
+                }
+
                 final_path = new_path;
                 // Note: Usage updates are complex; for now, we rely on the user or future MCP tooling
                 // to handle renaming in usage files.
