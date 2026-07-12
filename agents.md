@@ -1,5 +1,9 @@
 # Agents — Rust Refactor MCP
 
+## User Updates
+
+While actively working, reread `user-updates.md` for new instructions at least once per minute and incorporate any new guidance before continuing.
+
 All requirements, conventions, and workflows for this project.
 Read this file before any work session.
 

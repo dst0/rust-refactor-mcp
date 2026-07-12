@@ -36,6 +36,7 @@ pub fn compute_module_name(entity_name: &str, items: &[Item]) -> String {
     new_module
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn extract_entity(
     source: &str,
     entity_name: &str,
@@ -228,7 +229,7 @@ pub fn extract_entity(
             let mut imported_names: HashSet<String> = new_file
                 .items
                 .iter()
-                .filter_map(|item| get_item_name(item))
+                .filter_map(get_item_name)
                 .collect();
 
             for imp in needed_imports {
@@ -441,7 +442,7 @@ pub fn extract_entity(
             cached_files,
             entity_attrs.as_deref(),
         )?;
-        update_parent_mod(&target_folder, &new_module);
+        update_parent_mod(target_folder, &new_module);
         Ok(ExtractResult {
             new_file_path,
             test_file_path,
@@ -611,13 +612,7 @@ fn remove_entity_from_use_tree(tree: &mut syn::UseTree, entity: &str) -> bool {
     match tree {
         syn::UseTree::Name(n) => n.ident != entity,
         syn::UseTree::Rename(r) => r.ident != entity && r.rename != entity,
-        syn::UseTree::Path(p) => {
-            if remove_entity_from_use_tree(&mut p.tree, entity) {
-                true
-            } else {
-                false
-            }
-        }
+        syn::UseTree::Path(p) => remove_entity_from_use_tree(&mut p.tree, entity),
         syn::UseTree::Group(g) => {
             let mut new_items = syn::punctuated::Punctuated::new();
             for item in &g.items {
@@ -640,7 +635,7 @@ pub fn detect_needed_imports_for_extracted(
 ) -> Vec<ItemUse> {
     let extracted_names: std::collections::HashSet<String> = extracted
         .iter()
-        .filter_map(|item| get_item_name(item))
+        .filter_map(get_item_name)
         .collect();
 
     parsed
@@ -1099,12 +1094,10 @@ pub fn make_item_pub(item: &mut Item) {
         Item::Const(c) => promote_vis(&mut c.vis),
         Item::Static(s) => promote_vis(&mut s.vis),
         Item::Mod(m) => promote_vis(&mut m.vis),
-        Item::Impl(i) => {
-            if i.trait_.is_none() {
-                for item in &mut i.items {
-                    if let syn::ImplItem::Fn(f) = item {
-                        promote_vis(&mut f.vis);
-                    }
+        Item::Impl(i) if i.trait_.is_none() => {
+            for item in &mut i.items {
+                if let syn::ImplItem::Fn(f) = item {
+                    promote_vis(&mut f.vis);
                 }
             }
         }
@@ -1128,7 +1121,7 @@ pub fn get_item_vis(item: &Item) -> Option<syn::Visibility> {
         Item::Mod(m) => Some(m.vis.clone()),
         Item::Macro(m) => {
             let mut iter = m.mac.tokens.clone().into_iter();
-            while let Some(token) = iter.next() {
+            for token in &mut iter {
                 if let proc_macro2::TokenTree::Ident(ref id) = token {
                     if id == "pub" {
                         let vis: syn::Visibility = syn::parse_quote!(pub);
@@ -1181,7 +1174,7 @@ pub fn get_item_name(item: &Item) -> Option<String> {
             }
             let mut iter = m.mac.tokens.clone().into_iter();
             let mut prev_was_struct_or_enum = false;
-            while let Some(token) = iter.next() {
+            for token in &mut iter {
                 if let proc_macro2::TokenTree::Ident(ref id) = token {
                     if prev_was_struct_or_enum {
                         return Some(id.to_string());
@@ -1237,15 +1230,14 @@ impl VisitMut for QualPathReplacer {
         if len >= 2
             && i.segments[len - 2].ident == self.old_mod
             && i.segments[len - 1].ident == self.entity_name
+            && !self.new_mod.contains("::")
         {
-            if !self.new_mod.contains("::") {
-                let new_segment = syn::PathSegment {
-                    ident: syn::Ident::new(&self.new_mod, i.segments[len - 2].ident.span()),
-                    arguments: syn::PathArguments::None,
-                };
-                i.segments.insert(len - 1, new_segment);
-                self.changed = true;
-            }
+            let new_segment = syn::PathSegment {
+                ident: syn::Ident::new(&self.new_mod, i.segments[len - 2].ident.span()),
+                arguments: syn::PathArguments::None,
+            };
+            i.segments.insert(len - 1, new_segment);
+            self.changed = true;
         }
         visit_mut::visit_path_mut(self, i);
     }
