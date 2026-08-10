@@ -35,7 +35,7 @@ pub mod usage_analysis;
 #[allow(dead_code)]
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 && (args[1] == "SPLIT_DIR" || args.len() >= 4) {
+    if args.len() > 1 && args[1] != "--stdio" {
         cli_main(&args[1..]);
         return;
     }

@@ -45,3 +45,53 @@ pub fn update_parent_mod(target_folder: &str, entity_name: &str) {
     let new_content = prettyplease::unparse(&new_file);
     let _ = std::fs::write(&module_file, new_content);
 }
+
+pub fn remove_from_parent_mod(target_folder: &str, entity_name: &str) {
+    let mut module_file = PathBuf::from(target_folder).join("lib.rs");
+    if !module_file.exists() {
+        module_file = PathBuf::from(target_folder).join("mod.rs");
+    }
+    if !module_file.exists() {
+        module_file = PathBuf::from(target_folder).join("main.rs");
+    }
+    if !module_file.exists() {
+        module_file = PathBuf::from(format!("{}.rs", target_folder));
+    }
+    let content = match std::fs::read_to_string(&module_file) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let Ok(parsed) = syn::parse_file(&content) else {
+        return;
+    };
+    let mod_name = to_snake_case(entity_name);
+    let mod_ident = if let Ok(id) = syn::parse_str::<syn::Ident>(&mod_name) {
+        id
+    } else if let Ok(id) = syn::parse_str::<syn::Ident>(&format!("r#{}", mod_name)) {
+        id
+    } else {
+        return;
+    };
+
+    let mut new_items = Vec::new();
+    let mut changed = false;
+    for item in &parsed.items {
+        let mut keep = true;
+        if let Item::Mod(m) = item {
+            if m.ident == mod_ident {
+                keep = false;
+                changed = true;
+            }
+        }
+        if keep {
+            new_items.push(item.clone());
+        }
+    }
+
+    if changed {
+        let mut new_file = parsed;
+        new_file.items = new_items;
+        let new_content = prettyplease::unparse(&new_file);
+        let _ = std::fs::write(&module_file, new_content);
+    }
+}

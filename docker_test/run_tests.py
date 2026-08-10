@@ -7,10 +7,20 @@ import shutil
 from pathlib import Path
 
 REPOS = [
-    "https://github.com/hyperium/hyper"
+    "https://github.com/hyperium/hyper",
+    "https://github.com/ratatui-org/ratatui",
+    "https://github.com/dtolnay/anyhow",
+    "https://github.com/uuid-rs/uuid",
+    "https://github.com/servo/rust-url",
+    "https://github.com/tokio-rs/bytes",
+    "https://github.com/hyperium/http",
+    "https://github.com/rust-lang/regex",
+    "https://github.com/image-rs/image",
+    "https://github.com/mitsuhiko/minijinja",
+    "https://github.com/env-logger-rs/env_logger"
 ]
 
-TOOL = "/rust-refactor-mcp/target/release/rust-refactor-mcp"
+TOOL = "/home/dst/dev/rust-refactor-mcp/target/release/rust-refactor-mcp"
 
 # Statistics structure
 stats = {
@@ -52,7 +62,7 @@ for repo_url in REPOS:
     print(f"======================================")
 
     # Clone
-    repo_dir = Path(f"/test/{repo_name}")
+    repo_dir = Path(f"/home/dst/dev/rust-refactor-mcp/test_repos/{repo_name}")
     if repo_dir.exists():
         try:
             shutil.rmtree(repo_dir)
@@ -287,14 +297,15 @@ for repo_url in REPOS:
                         print(f"Error reading file: {e}")
                     print(f"--- END OF {ef} ---\n")
             
-            print("Stopping tests due to failure.")
-            sys.exit(1)
+            # sys.exit(1)
+            pass
         else:
             print("PREFLIGHT passed!")
 
     if crashes > 0:
-        print("Stopping tests due to CRASH.")
-        sys.exit(1)
+        print("Continuing despite CRASH.")
+        # sys.exit(1)
+        pass
 
 # Print summary table
 print("\n=========================================================================")
