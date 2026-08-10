@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 
+[lib]
+name = "rust_refactor_mcp"
+path = "src/lib.rs"
+
 [[bin]]
 name = "rust-refactor-mcp"
 path = "src/main.rs"
