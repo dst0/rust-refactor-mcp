@@ -85,6 +85,10 @@ fixtures/
 }
 ```
 
+## Commands
+
+- Poll running background tasks with reasonable intervals that approximately equal to ETA or reasonably smaller when closer progress monitoring is absolutely necessary. But not repeatedly in tight loops. Rely on reactive completion messages instead.
+
 ## Test Quality & Adversarial Review
 
 - Tests must never be added solely as mechanical line-fillers to pass coverage gates. Tests must meaningfully verify domain logic, invariant preservation, realistic crash recovery, positive cases, negative cases, and edge cases.
@@ -126,3 +130,9 @@ Every PR/commit must pass:
 - Snake-case for all generated file names
 - No `pub mod` index files — entities are standalone modules
 - Usage path updates use AST resolution, never string replacement
+
+## Issues and PRs
+
+When creating PRs:
+
+- Always include a `## Bug Fixes` section in the PR description detailing any bugs uncovered and resolved during the task, with references to their regression tests.
